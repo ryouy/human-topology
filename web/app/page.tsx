@@ -1,10 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import { ControlBar } from "@/components/ControlBar";
 import { DetailPanel } from "@/components/DetailPanel";
 import { useGraphData } from "@/hooks/useGraphData";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 const PersonGraph = dynamic(
   () => import("@/components/PersonGraph").then((m) => m.PersonGraph),
@@ -14,9 +22,12 @@ import { useWikiDetail } from "@/hooks/useWikiDetail";
 import { buildKHopSubgraph } from "@/lib/graphSubgraph";
 import type { GraphData, NodeSizeMode, PersonNode } from "@/types/graph";
 
+const MOBILE_GRAPH_QUERY = "(max-width: 768px), (max-height: 520px)";
+
 export default function HomePage() {
   const { data, error } = useGraphData();
   const { detail, load, clear } = useWikiDetail();
+  const isMobile = useIsMobile();
 
   const [view, setView] = useState<"global" | "ego">("global");
   const [dim, setDim] = useState<"2d" | "3d">("2d");
@@ -25,6 +36,8 @@ export default function HomePage() {
   const [centerId, setCenterId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  /** スマホ向け view を適用してからグラフをマウントし、全体マップを一度も描画しない */
+  const [graphDisplayReady, setGraphDisplayReady] = useState(false);
 
   const firstNodeId = data?.nodes[0]?.id ?? null;
 
@@ -35,6 +48,19 @@ export default function HomePage() {
       setCenterId(firstNodeId);
     }
   }, [view, centerId, firstNodeId]);
+
+  useLayoutEffect(() => {
+    if (!data) return;
+    if (typeof window === "undefined") return;
+    if (window.matchMedia(MOBILE_GRAPH_QUERY).matches) {
+      setView("ego");
+      setHops(1);
+      setDim("2d");
+      const first = data.nodes[0]?.id;
+      if (first) setCenterId(first);
+    }
+    setGraphDisplayReady(true);
+  }, [data]);
 
   const displayGraph: GraphData | null = useMemo(() => {
     if (!data) return null;
@@ -124,6 +150,11 @@ export default function HomePage() {
             <p className="text-xs text-slate-500">
               日本語 Wikipedia 日本人人物リンク距離（{data.metadata.nodeCount} ノード /{" "}
               {data.metadata.edgeCount} エッジ）
+              {isMobile && (
+                <span className="mt-1 block text-[10px] text-slate-600">
+                  スマホは近傍表示で軽量化しています。「全体マップ」は重い場合があります。
+                </span>
+              )}
             </p>
           </div>
           <ControlBar
@@ -131,6 +162,7 @@ export default function HomePage() {
             onViewChange={setView}
             dim={dim}
             onDimChange={setDim}
+            isMobile={isMobile}
             hops={hops}
             onHopsChange={setHops}
             sizeMode={sizeMode}
@@ -144,15 +176,26 @@ export default function HomePage() {
       </header>
 
       <div className="relative min-h-0 flex-1 bg-white">
-        <div className="absolute inset-0 h-[calc(100vh-140px)] min-h-[420px] bg-white">
-          <PersonGraph
-            data={displayGraph}
-            mode={dim}
-            sizeMode={sizeMode}
-            focusId={focusId}
-            onNodeClick={handleGraphNodeClick}
-            onBackgroundClick={handleGraphBackgroundClick}
-          />
+        <div
+          className={`absolute inset-0 bg-white touch-none ${
+            isMobile ? "min-h-[min(420px,55vh)] h-[calc(100dvh-160px)]" : "h-[calc(100vh-140px)] min-h-[420px]"
+          }`}
+        >
+          {!graphDisplayReady ? (
+            <div className="flex h-full items-center justify-center text-sm text-slate-500">
+              グラフを表示準備中…
+            </div>
+          ) : (
+            <PersonGraph
+              data={displayGraph}
+              mode={isMobile ? "2d" : dim}
+              sizeMode={sizeMode}
+              focusId={focusId}
+              isMobile={isMobile}
+              onNodeClick={handleGraphNodeClick}
+              onBackgroundClick={handleGraphBackgroundClick}
+            />
+          )}
         </div>
 
         {detail.status !== "idle" && (

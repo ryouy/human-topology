@@ -49,14 +49,21 @@ function sizeFor(node: PersonNode, mode: NodeSizeMode): number {
   return Math.min(22, Math.max(2, raw));
 }
 
-function applyForces(fg: FG2Methods | FG3Methods | undefined, nodeCount: number) {
+function applyForces(
+  fg: FG2Methods | FG3Methods | undefined,
+  nodeCount: number,
+  isMobile = false,
+) {
   if (!fg || typeof fg.d3Force !== "function") return;
 
   fg.d3Force("center", null);
 
   const n = Math.max(1, nodeCount);
   // 大規模時は衝突の強さを少し下げて収束を速くし、シミュレーション負荷を抑える
-  const collisionStrength = n > 4500 ? 0.78 : n > 2000 ? 0.86 : 0.94;
+  let collisionStrength = n > 4500 ? 0.78 : n > 2000 ? 0.86 : 0.94;
+  if (isMobile) {
+    collisionStrength *= 0.72;
+  }
 
   // ノード重なりによる「太陽」塊を避ける（半径は描画サイズに合わせる）
   fg.d3Force(
@@ -68,8 +75,10 @@ function applyForces(fg: FG2Methods | FG3Methods | undefined, nodeCount: number)
 
   const charge = fg.d3Force("charge") as { strength?: (n: number | (() => number)) => unknown } | undefined;
   if (charge) {
-    // 大規模グラフほど強い反発（上限付き）
-    const strength = -Math.min(5200, 420 + Math.sqrt(n) * 38);
+    let strength = -Math.min(5200, 420 + Math.sqrt(n) * 38);
+    if (isMobile) {
+      strength *= 0.82;
+    }
     charge.strength?.(strength);
   }
 
@@ -89,14 +98,22 @@ function applyForces(fg: FG2Methods | FG3Methods | undefined, nodeCount: number)
  * ノード・エッジが増えるほど 1 フレームの描画コストが跳ね上がるため、
  * シミュレーション歩数をスケールダウンして初期レイアウトの総コストを抑える。
  */
-function simulationTicksForScale(nodeCount: number, edgeCount: number): {
+function simulationTicksForScale(
+  nodeCount: number,
+  edgeCount: number,
+  isMobile: boolean,
+): {
   warmupTicks: number;
   cooldownTicks: number;
 } {
   const denom = nodeCount + edgeCount * 0.45 + 400;
   // 以前よりやや短めにし、初期レイアウトの CPU 時間を抑える
-  const cooldownTicks = Math.max(64, Math.min(340, Math.floor(2_450_000 / denom)));
-  const warmupTicks = Math.min(90, Math.max(20, Math.floor(cooldownTicks * 0.22)));
+  let cooldownTicks = Math.max(64, Math.min(340, Math.floor(2_450_000 / denom)));
+  let warmupTicks = Math.min(90, Math.max(20, Math.floor(cooldownTicks * 0.22)));
+  if (isMobile) {
+    cooldownTicks = Math.max(48, Math.floor(cooldownTicks * 0.55));
+    warmupTicks = Math.max(16, Math.floor(warmupTicks * 0.55));
+  }
   return { warmupTicks, cooldownTicks };
 }
 
@@ -105,6 +122,7 @@ function PersonGraphInner({
   mode,
   sizeMode,
   focusId,
+  isMobile,
   onNodeClick,
   onBackgroundClick,
 }: {
@@ -112,6 +130,8 @@ function PersonGraphInner({
   mode: "2d" | "3d";
   sizeMode: NodeSizeMode;
   focusId: string | null;
+  /** スマホ向けにシミュレーションと描画負荷を下げる */
+  isMobile?: boolean;
   onNodeClick: (n: PersonNode) => void;
   onBackgroundClick?: () => void;
 }) {
@@ -141,20 +161,21 @@ function PersonGraphInner({
 
   const nodeCount = graphData.nodes.length;
   const edgeCount = graphData.links.length;
-  const { warmupTicks, cooldownTicks } = simulationTicksForScale(nodeCount, edgeCount);
+  const mobile = isMobile === true;
+  const { warmupTicks, cooldownTicks } = simulationTicksForScale(nodeCount, edgeCount, mobile);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => {
       if (mode === "2d") {
-        applyForces(fg2.current, nodeCount);
+        applyForces(fg2.current, nodeCount, mobile);
         fg2.current?.d3ReheatSimulation?.();
       } else {
-        applyForces(fg3.current, nodeCount);
+        applyForces(fg3.current, nodeCount, mobile);
         fg3.current?.d3ReheatSimulation?.();
       }
     });
     return () => cancelAnimationFrame(t);
-  }, [graphData, mode, nodeCount]);
+  }, [graphData, mode, nodeCount, mobile]);
 
   useEffect(() => {
     if (!focusId) return;
@@ -219,9 +240,9 @@ function PersonGraphInner({
         onBackgroundClick={onBackgroundClick}
         warmupTicks={warmupTicks}
         cooldownTicks={cooldownTicks}
-        d3VelocityDecay={0.48}
-        d3AlphaDecay={0.045}
-        d3AlphaMin={0.022}
+        d3VelocityDecay={mobile ? 0.55 : 0.48}
+        d3AlphaDecay={mobile ? 0.055 : 0.045}
+        d3AlphaMin={mobile ? 0.03 : 0.022}
       />
     );
   }
@@ -246,9 +267,9 @@ function PersonGraphInner({
       linkResolution={6}
       warmupTicks={warmupTicks}
       cooldownTicks={cooldownTicks}
-      d3VelocityDecay={0.48}
-      d3AlphaDecay={0.045}
-      d3AlphaMin={0.022}
+      d3VelocityDecay={mobile ? 0.55 : 0.48}
+      d3AlphaDecay={mobile ? 0.055 : 0.045}
+      d3AlphaMin={mobile ? 0.03 : 0.022}
     />
   );
 }

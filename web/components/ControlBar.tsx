@@ -15,6 +15,7 @@ export function ControlBar({
   onQueryChange,
   searchHits,
   onPickHit,
+  isMobile = false,
 }: {
   view: "global" | "ego";
   onViewChange: (v: "global" | "ego") => void;
@@ -28,6 +29,7 @@ export function ControlBar({
   onQueryChange: (q: string) => void;
   searchHits: { id: string; title: string }[];
   onPickHit: (id: string) => void;
+  isMobile?: boolean;
 }) {
   return (
     <div className="pointer-events-auto flex flex-wrap items-end gap-3 rounded-lg border border-surface-border bg-surface-raised/90 px-3 py-2 shadow backdrop-blur">
@@ -61,12 +63,14 @@ export function ControlBar({
       <label className="flex flex-col gap-1 text-[11px] text-slate-400">
         表示
         <select
-          value={dim}
+          value={isMobile ? "2d" : dim}
+          disabled={isMobile}
           onChange={(e) => onDimChange(e.target.value as "2d" | "3d")}
-          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
+          title={isMobile ? "スマホでは 3D をオフにしています" : undefined}
+          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <option value="2d">2D</option>
-          <option value="3d">3D</option>
+          <option value="2d">2D{isMobile ? "（推奨）" : ""}</option>
+          {!isMobile && <option value="3d">3D</option>}
         </select>
       </label>
 

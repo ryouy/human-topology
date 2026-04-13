@@ -15,6 +15,8 @@ export function ControlBar({
   onQueryChange,
   searchHits,
   onPickHit,
+  showEdges,
+  onShowEdgesChange,
   isMobile = false,
 }: {
   view: "global" | "ego";
@@ -29,32 +31,34 @@ export function ControlBar({
   onQueryChange: (q: string) => void;
   searchHits: { id: string; title: string }[];
   onPickHit: (id: string) => void;
+  showEdges: boolean;
+  onShowEdgesChange: (v: boolean) => void;
   isMobile?: boolean;
 }) {
   return (
     <div className="pointer-events-auto flex flex-wrap items-end gap-3 rounded-lg border border-surface-border bg-surface-raised/90 px-3 py-2 shadow backdrop-blur">
       <label className="flex flex-col gap-1 text-[11px] text-slate-400">
-        モード
+        View
         <select
           value={view}
           onChange={(e) => onViewChange(e.target.value as "global" | "ego")}
           className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
         >
-          <option value="global">全体マップ</option>
-          <option value="ego">個人起点</option>
+          <option value="global">Global</option>
+          <option value="ego">Ego</option>
         </select>
       </label>
 
       <label className="flex flex-col gap-1 text-[11px] text-slate-400">
-        ホップ数
+        Hops
         <select
           value={hops}
           disabled={view !== "ego"}
           onChange={(e) => onHopsChange(Number(e.target.value))}
           title={
             view !== "ego"
-              ? "個人起点モードのときだけグラフに反映されます（全体マップでは全ノード表示）"
-              : "中心人物からのリンクの段数"
+              ? "Only applies in ego view (global shows the full graph)"
+              : "Neighborhood radius from the center person"
           }
           className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -65,38 +69,48 @@ export function ControlBar({
       </label>
 
       <label className="flex flex-col gap-1 text-[11px] text-slate-400">
-        表示
+        Space
         <select
           value={isMobile ? "2d" : dim}
           disabled={isMobile}
           onChange={(e) => onDimChange(e.target.value as "2d" | "3d")}
-          title={isMobile ? "スマホでは 3D をオフにしています" : undefined}
+          title={isMobile ? "3D is disabled on small screens" : undefined}
           className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <option value="2d">2D{isMobile ? "（推奨）" : ""}</option>
+          <option value="2d">2D{isMobile ? " · default" : ""}</option>
           {!isMobile && <option value="3d">3D</option>}
         </select>
       </label>
 
       <label className="flex flex-col gap-1 text-[11px] text-slate-400">
-        ノードサイズ
+        Node size
         <select
           value={sizeMode}
           onChange={(e) => onSizeModeChange(e.target.value as NodeSizeMode)}
           className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
         >
-          <option value="inboundLinksCount">被リンク数</option>
+          <option value="inboundLinksCount">In-links</option>
           <option value="degree">degree</option>
           <option value="betweenness">betweenness</option>
         </select>
       </label>
 
+      <label className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
+        <input
+          type="checkbox"
+          checked={showEdges}
+          onChange={(e) => onShowEdgesChange(e.target.checked)}
+          className="rounded border-surface-border"
+        />
+        Show edges
+      </label>
+
       <label className="flex min-w-[200px] flex-col gap-1 text-[11px] text-slate-400">
-        人物検索
+        Search
         <input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="名前の一部で検索"
+          placeholder="Name…"
           className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 placeholder:text-slate-600"
         />
         {searchHits.length > 0 && (

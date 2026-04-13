@@ -23,12 +23,17 @@ export function SimpleGraph2D({
   data,
   sizeMode,
   focusId,
+  searchCandidateIds = [],
+  showEdges = true,
   onNodeClick,
   onBackgroundClick,
 }: {
   data: GraphData;
   sizeMode: NodeSizeMode;
   focusId: string | null;
+  /** 検索候補（確定選択より弱い強調） */
+  searchCandidateIds?: string[];
+  showEdges?: boolean;
   onNodeClick: (n: PersonNode) => void;
   onBackgroundClick?: () => void;
 }) {
@@ -37,6 +42,10 @@ export function SimpleGraph2D({
   const viewRef = useRef<View2D>({ scale: 0.35, offsetX: 0, offsetY: 0 });
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
+  /** 複数ポインタを使った操作があったらノードクリックにしない */
+  const multiPointerGestureRef = useRef(false);
+  const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const prevCentroidRef = useRef<{ x: number; y: number } | null>(null);
   const onNodeClickRef = useRef(onNodeClick);
   const onBackgroundClickRef = useRef(onBackgroundClick);
   onNodeClickRef.current = onNodeClick;
@@ -50,6 +59,11 @@ export function SimpleGraph2D({
     }
     return m;
   }, [data.nodes]);
+
+  const searchCandidateSet = useMemo(
+    () => new Set(searchCandidateIds.map((id) => String(id))),
+    [searchCandidateIds],
+  );
 
   const [viewTick, setViewTick] = useState(0);
   const bumpView = useCallback(() => setViewTick((x) => x + 1), []);
@@ -93,21 +107,49 @@ export function SimpleGraph2D({
       ctx.stroke();
     };
 
-    stroke(otherEdges, "rgba(100,116,139,0.22)", 0.45);
-    stroke(mutualEdges, "rgba(37,99,235,0.38)", 0.9);
+    if (showEdges) {
+      stroke(otherEdges, "rgba(100,116,139,0.22)", 0.45);
+      stroke(mutualEdges, "rgba(37,99,235,0.38)", 0.9);
+    }
+
+    const focusStr = focusId != null ? String(focusId) : null;
 
     for (const n of data.nodes) {
       const p = positions.get(String(n.id));
       if (!p) continue;
       const r = sizeFor(n, sizeMode);
+      const sid = String(n.id);
+      const isFocus = focusStr !== null && sid === focusStr;
+      const isCandidate = searchCandidateSet.has(sid) && !isFocus;
+
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = "#2563eb";
+      if (isFocus) {
+        ctx.fillStyle = "#f97316";
+      } else if (isCandidate) {
+        ctx.fillStyle = "#3b82f6";
+      } else {
+        ctx.fillStyle = "#2563eb";
+      }
       ctx.fill();
+
+      if (isFocus) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 2.8 / t.scale, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(194, 65, 12, 0.95)";
+        ctx.lineWidth = 2.2 / t.scale;
+        ctx.stroke();
+      } else if (isCandidate) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 2.2 / t.scale, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(251, 191, 36, 0.95)";
+        ctx.lineWidth = 1.6 / t.scale;
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
-  }, [data.edges, data.nodes, positions, sizeMode, viewTick]);
+  }, [data.edges, data.nodes, positions, sizeMode, viewTick, focusId, searchCandidateSet, showEdges]);
 
   useEffect(() => {
     draw();
@@ -146,7 +188,7 @@ export function SimpleGraph2D({
     if (focusId) {
       const p = positions.get(String(focusId));
       if (p) {
-        const zs = 3.2;
+        const zs = 1.75;
         viewRef.current = { scale: zs, offsetX: -p.x * zs, offsetY: -p.y * zs };
         bumpView();
       }
@@ -217,14 +259,71 @@ export function SimpleGraph2D({
       bumpView();
     };
 
+    const centroid = (): { x: number; y: number } | null => {
+      const m = activePointersRef.current;
+      if (m.size === 0) return null;
+      let sx = 0;
+      let sy = 0;
+      for (const p of m.values()) {
+        sx += p.x;
+        sy += p.y;
+      }
+      const n = m.size;
+      return { x: sx / n, y: sy / n };
+    };
+
     const onPointerDown = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      dragStartRef.current = { x: e.clientX, y: e.clientY };
-      movedRef.current = false;
+      const m = activePointersRef.current;
+      m.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (m.size >= 2) {
+        multiPointerGestureRef.current = true;
+        prevCentroidRef.current = centroid();
+        movedRef.current = true;
+      } else {
+        dragStartRef.current = { x: e.clientX, y: e.clientY };
+        movedRef.current = false;
+      }
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    /** スマホは二本指でパン（単指はノード操作）。マウスは左ドラッグ・Shift+ドラッグ・中・右でパン */
+    const canSinglePointerPan = (e: PointerEvent): boolean => {
+      if (e.pointerType === "touch") return false;
+      if ((e.buttons & 4) !== 0 || (e.buttons & 2) !== 0) return true;
+      if ((e.buttons & 1) === 0) return false;
+      return true;
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!dragStartRef.current || !(e.buttons & 1)) return;
+      if (!activePointersRef.current.has(e.pointerId)) return;
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      const nPtr = activePointersRef.current.size;
+      if (nPtr >= 2) {
+        const c = centroid();
+        const prev = prevCentroidRef.current;
+        if (c && prev) {
+          const t = viewRef.current;
+          viewRef.current = {
+            ...t,
+            offsetX: t.offsetX + (c.x - prev.x),
+            offsetY: t.offsetY + (c.y - prev.y),
+          };
+          bumpView();
+        }
+        prevCentroidRef.current = c;
+        multiPointerGestureRef.current = true;
+        movedRef.current = true;
+        return;
+      }
+
+      if (!dragStartRef.current) return;
+      if (!canSinglePointerPan(e)) return;
+
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
       if (Math.hypot(dx, dy) > 4) movedRef.current = true;
@@ -239,42 +338,82 @@ export function SimpleGraph2D({
       }
     };
 
-    const onPointerUp = (e: PointerEvent) => {
-      if (e.button !== 0 || !dragStartRef.current) return;
+    const finishPointerUp = (e: PointerEvent) => {
+      activePointersRef.current.delete(e.pointerId);
+      const remaining = activePointersRef.current.size;
+
+      if (remaining === 1) {
+        const only = [...activePointersRef.current.values()][0];
+        prevCentroidRef.current = null;
+        dragStartRef.current = { x: only.x, y: only.y };
+        movedRef.current = false;
+        return;
+      }
+
+      if (remaining > 0) return;
+
+      prevCentroidRef.current = null;
+
+      if (e.button !== 0 || !dragStartRef.current) {
+        dragStartRef.current = null;
+        return;
+      }
+
       const rect = canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
-      const wasDrag = movedRef.current || Math.hypot(dx, dy) > 6;
+      const wasDrag =
+        movedRef.current || multiPointerGestureRef.current || Math.hypot(dx, dy) > 6;
       dragStartRef.current = null;
       movedRef.current = false;
+      multiPointerGestureRef.current = false;
       if (wasDrag) return;
       const n = pickNode(sx, sy);
       if (n) onNodeClickRef.current(n);
       else onBackgroundClickRef.current?.();
     };
 
+    const onPointerUp = (e: PointerEvent) => {
+      finishPointerUp(e);
+    };
+
+    const onPointerCancel = (e: PointerEvent) => {
+      activePointersRef.current.delete(e.pointerId);
+      if (activePointersRef.current.size === 0) {
+        dragStartRef.current = null;
+        movedRef.current = false;
+        multiPointerGestureRef.current = false;
+        prevCentroidRef.current = null;
+      }
+    };
+
+    const onContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerCancel);
+    canvas.addEventListener("contextmenu", onContextMenu);
 
     return () => {
       ro.disconnect();
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerCancel);
+      canvas.removeEventListener("contextmenu", onContextMenu);
     };
   }, [draw, pickNode, bumpView]);
 
   return (
     <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-white">
       <canvas ref={canvasRef} className="block h-full w-full touch-none" role="presentation" />
-      <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[10px] text-slate-500 shadow">
-        ホイールで拡大縮小 · ドラッグで表示移動 · ノードをクリックで詳細
-      </div>
     </div>
   );
 }

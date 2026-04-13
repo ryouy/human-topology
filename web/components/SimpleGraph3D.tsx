@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { GraphData, NodeSizeMode, PersonNode } from "@/types/graph";
 import { layoutXYZ, sizeFor } from "@/lib/graphLayout";
@@ -45,7 +46,7 @@ function focusCameraOn(
 ) {
   const p = positions.get(String(id));
   if (!p) return;
-  const dist = 420;
+  const dist = 780;
   camera.position.set(p.x, p.y, p.z + dist);
   controls.target.set(p.x, p.y, p.z);
   controls.update();
@@ -55,6 +56,8 @@ export function SimpleGraph3D({
   data,
   sizeMode,
   focusId,
+  searchCandidateIds = [],
+  showEdges = true,
   onNodeClick,
   onBackgroundClick,
   isMobile,
@@ -62,6 +65,8 @@ export function SimpleGraph3D({
   data: GraphData;
   sizeMode: NodeSizeMode;
   focusId: string | null;
+  searchCandidateIds?: string[];
+  showEdges?: boolean;
   onNodeClick: (n: PersonNode) => void;
   onBackgroundClick?: () => void;
   isMobile?: boolean;
@@ -80,6 +85,10 @@ export function SimpleGraph3D({
   const meshListRef = useRef<THREE.Mesh[]>([]);
   const positionsRef = useRef<Map<string, { x: number; y: number; z: number }>>(new Map());
   const renderRef = useRef<(() => void) | null>(null);
+  const matBaseRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const matCandidateRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const matFocusRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const edgeGroupRef = useRef<THREE.Group | null>(null);
 
   const positions = useMemo(() => {
     const m = new Map<string, { x: number; y: number; z: number }>();
@@ -89,6 +98,11 @@ export function SimpleGraph3D({
     }
     return m;
   }, [data.nodes]);
+
+  const searchCandidateSet = useMemo(
+    () => new Set(searchCandidateIds.map((id) => String(id))),
+    [searchCandidateIds],
+  );
 
   const sphereSeg = isMobile === true ? 8 : 12;
 
@@ -113,6 +127,12 @@ export function SimpleGraph3D({
 
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = false;
+    controls.mouseButtons = {
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.PAN,
+    };
+    controls.screenSpacePanning = true;
     controlsRef.current = controls;
 
     const render = () => renderer.render(scene, camera);
@@ -145,20 +165,41 @@ export function SimpleGraph3D({
       opacity: 0.38,
     });
 
+    const edgeGroup = new THREE.Group();
+    scene.add(edgeGroup);
+    edgeGroupRef.current = edgeGroup;
+
     if (posOther.length > 0) {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(posOther, 3));
-      scene.add(new THREE.LineSegments(g, matOther));
+      edgeGroup.add(new THREE.LineSegments(g, matOther));
     }
     if (posMutual.length > 0) {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(posMutual, 3));
-      scene.add(new THREE.LineSegments(g, matMutual));
+      edgeGroup.add(new THREE.LineSegments(g, matMutual));
     }
 
     const meshList: THREE.Mesh[] = [];
     const sphereGeomCache = new Map<number, THREE.SphereGeometry>();
-    const nodeMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.45, metalness: 0.1 });
+    const matBase = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.45, metalness: 0.1 });
+    const matCandidate = new THREE.MeshStandardMaterial({
+      color: 0x3b82f6,
+      roughness: 0.4,
+      metalness: 0.12,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.38,
+    });
+    const matFocus = new THREE.MeshStandardMaterial({
+      color: 0xf97316,
+      roughness: 0.35,
+      metalness: 0.12,
+      emissive: 0xc2410c,
+      emissiveIntensity: 0.28,
+    });
+    matBaseRef.current = matBase;
+    matCandidateRef.current = matCandidate;
+    matFocusRef.current = matFocus;
 
     for (const n of data.nodes) {
       const p = positions.get(String(n.id));
@@ -170,7 +211,7 @@ export function SimpleGraph3D({
         geom = new THREE.SphereGeometry(r, sphereSeg, sphereSeg);
         sphereGeomCache.set(key, geom);
       }
-      const mesh = new THREE.Mesh(geom, nodeMat);
+      const mesh = new THREE.Mesh(geom, matBase);
       mesh.position.set(p.x, p.y, p.z);
       mesh.userData.personNode = n;
       scene.add(mesh);
@@ -232,15 +273,21 @@ export function SimpleGraph3D({
       }
     };
 
+    const onContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("contextmenu", onContextMenu);
 
     return () => {
       ro.disconnect();
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("contextmenu", onContextMenu);
       controls.removeEventListener("change", render);
       controls.dispose();
       scene.traverse((obj) => {
@@ -251,7 +298,12 @@ export function SimpleGraph3D({
       for (const g of sphereGeomCache.values()) {
         g.dispose();
       }
-      nodeMat.dispose();
+      matBaseRef.current?.dispose();
+      matCandidateRef.current?.dispose();
+      matFocusRef.current?.dispose();
+      matBaseRef.current = null;
+      matCandidateRef.current = null;
+      matFocusRef.current = null;
       matOther.dispose();
       matMutual.dispose();
       scene.clear();
@@ -262,8 +314,16 @@ export function SimpleGraph3D({
       sceneRef.current = null;
       meshListRef.current = [];
       renderRef.current = null;
+      edgeGroupRef.current = null;
     };
   }, [data, sizeMode, positions, sphereSeg]);
+
+  useEffect(() => {
+    const g = edgeGroupRef.current;
+    const render = renderRef.current;
+    if (g) g.visible = showEdges;
+    render?.();
+  }, [showEdges]);
 
   useEffect(() => {
     const camera = cameraRef.current;
@@ -281,12 +341,28 @@ export function SimpleGraph3D({
     render();
   }, [focusId, data.nodes, sizeMode]);
 
+  useEffect(() => {
+    const meshes = meshListRef.current;
+    const render = renderRef.current;
+    const mb = matBaseRef.current;
+    const mc = matCandidateRef.current;
+    const mf = matFocusRef.current;
+    if (!meshes.length || !mb || !mc || !mf) return;
+
+    const focusStr = focusId != null ? String(focusId) : null;
+    for (const mesh of meshes) {
+      const n = mesh.userData.personNode as PersonNode;
+      const sid = String(n.id);
+      const isFocus = focusStr !== null && sid === focusStr;
+      const isCand = searchCandidateSet.has(sid) && !isFocus;
+      mesh.material = isFocus ? mf : isCand ? mc : mb;
+    }
+    render?.();
+  }, [focusId, searchCandidateSet]);
+
   return (
     <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-white">
       <canvas ref={canvasRef} className="block h-full w-full touch-none" role="presentation" />
-      <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[10px] text-slate-500 shadow">
-        ドラッグで回転 · ホイールでズーム · ノードをクリックで詳細
-      </div>
     </div>
   );
 }

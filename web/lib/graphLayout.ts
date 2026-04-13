@@ -12,15 +12,19 @@ export function hash01(id: string): number {
   return (h >>> 0) / 0xffffffff;
 }
 
-/** 物理シミュレーションなしの固定座標（タイトル由来のハッシュで安定配置） */
+/**
+ * 物理シミュレーションなしの固定座標（ID 由来のハッシュで安定配置）。
+ * 次元ごとの値は「文字列末尾だけ違う」形（`${id}:x` / `:y`）にしないこと。
+ * 末尾1文字差だと FNV の入力がほぼ同じになり、x と y が強く相関して対角線上に潰れる。
+ */
 export function layoutXYZ(id: string, dim3: boolean): { x: number; y: number; z?: number } {
-  const jx = (hash01(`${id}:jx`) - 0.5) * 2 * JITTER;
-  const jy = (hash01(`${id}:jy`) - 0.5) * 2 * JITTER;
-  const x = (hash01(`${id}:x`) - 0.5) * 2 * BOX_HALF + jx;
-  const y = (hash01(`${id}:y`) - 0.5) * 2 * BOX_HALF + jy;
+  const jx = (hash01(`jx|${id}`) - 0.5) * 2 * JITTER;
+  const jy = (hash01(`jy|${id}`) - 0.5) * 2 * JITTER;
+  const x = (hash01(`x|${id}`) - 0.5) * 2 * BOX_HALF + jx;
+  const y = (hash01(`y|${id}`) - 0.5) * 2 * BOX_HALF + jy;
   if (!dim3) return { x, y };
-  const jz = (hash01(`${id}:jz`) - 0.5) * 2 * JITTER;
-  const z = (hash01(`${id}:z`) - 0.5) * 2 * BOX_HALF + jz;
+  const jz = (hash01(`jz|${id}`) - 0.5) * 2 * JITTER;
+  const z = (hash01(`z|${id}`) - 0.5) * 2 * BOX_HALF + jz;
   return { x, y, z };
 }
 

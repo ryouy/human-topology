@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "wiki human topology ",
+  title: "Human topology",
   description:
-    "wiki日本人人物ページのみで構成されたリンク距離の可視化",
+    "Link distance across Japanese Wikipedia biographies — explore the graph in 2D or 3D.",
 };
 
 export const viewport: Viewport = {
@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja">
+    <html lang="en">
       <body className="min-h-screen">{children}</body>
     </html>
   );

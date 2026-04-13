@@ -13,10 +13,11 @@ export function DetailPanel({
   onPickRelated,
 }: {
   detail: DetailState;
-  /** 全体グラフ（個人起点ビューでも隣接はフルグラフから算出） */
+  /** Full graph (related-neighbor ranking uses this even in ego view) */
   fullGraph: GraphData;
   onClose: () => void;
-  onSetCenter?: () => void;
+  /** Set ego-network center (`nodeId` from graph.json) */
+  onSetCenter?: (nodeId: string) => void;
   onPickRelated?: (id: string) => void;
 }) {
   const node = detail.status === "idle" ? null : detail.node;
@@ -30,27 +31,27 @@ export function DetailPanel({
   return (
     <aside className="absolute right-0 top-0 z-20 flex h-full w-full max-w-md flex-col border-l border-surface-border bg-surface-raised/95 shadow-xl backdrop-blur">
       <div className="flex items-center justify-between border-b border-surface-border px-4 py-3">
-        <h2 className="text-sm font-semibold tracking-wide text-slate-200">人物詳細</h2>
+        <h2 className="text-sm font-semibold tracking-wide text-slate-200">Profile</h2>
         <button
           type="button"
           onClick={onClose}
           className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-100"
         >
-          閉じる
+          Close
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 text-sm">
         {detail.status === "loading" && (
           <div className="space-y-3">
-            <p className="text-slate-400">Wikipedia から取得中…</p>
+            <p className="text-slate-400">Loading from Wikipedia…</p>
             <p className="text-lg font-medium text-slate-100">{node.title}</p>
           </div>
         )}
 
         {detail.status === "error" && (
           <div className="space-y-3">
-            <p className="text-amber-300">要約の取得に失敗しました: {detail.message}</p>
+            <p className="text-amber-300">Could not load summary: {detail.message}</p>
             <p className="text-lg font-medium text-slate-100">{detail.node.title}</p>
             <a
               href={detail.articleUrl}
@@ -58,7 +59,7 @@ export function DetailPanel({
               rel="noreferrer"
               className="text-accent underline-offset-2 hover:underline"
             >
-              記事を開く
+              Open article
             </a>
           </div>
         )}
@@ -82,11 +83,11 @@ export function DetailPanel({
                   rel="noreferrer"
                   className="mt-1 inline-block text-sm text-accent hover:underline"
                 >
-                  Wikipedia で開く
+                  Open on Wikipedia
                 </a>
               </div>
             </div>
-            <p className="leading-relaxed text-slate-300">{detail.extract || "要約は空です。"}</p>
+            <p className="leading-relaxed text-slate-300">{detail.extract || "No summary."}</p>
           </div>
         )}
 
@@ -95,10 +96,10 @@ export function DetailPanel({
         {related.length > 0 && (
           <div className="mt-6 border-t border-surface-border pt-4">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              関連の深い人物（グラフ上の近傍）
+              Strong ties (graph neighbors)
             </h3>
             <p className="mb-2 text-[11px] leading-snug text-slate-500">
-              直接リンクがある人物を、つながり本数と中心性で並べています。
+              Direct links, ranked by edge count and centrality.
             </p>
             <ul className="max-h-52 space-y-1 overflow-y-auto text-xs">
               {related.map((r) => (
@@ -110,7 +111,7 @@ export function DetailPanel({
                   >
                     <span className="truncate font-medium">{r.title}</span>
                     <span className="shrink-0 font-mono text-[10px] text-slate-500">
-                      リンク{r.edgeCount}
+                      ×{r.edgeCount}
                     </span>
                   </button>
                 </li>
@@ -122,10 +123,10 @@ export function DetailPanel({
         {detail.status !== "loading" && onSetCenter && (
           <button
             type="button"
-            onClick={onSetCenter}
+            onClick={() => onSetCenter(node.id)}
             className="mt-6 w-full rounded border border-surface-border bg-slate-800/60 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
           >
-            個人起点マップの中心にする
+            Use as ego-network center
           </button>
         )}
       </div>
@@ -144,7 +145,7 @@ function MetricsBlock({ node }: { node: { title: string; url: string } & Record<
   return (
     <div className="mt-6 border-t border-surface-border pt-4">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-        graph.json メトリクス
+        Metrics (graph.json)
       </h3>
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         {rows.map(([k, v]) => (

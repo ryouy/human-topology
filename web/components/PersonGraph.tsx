@@ -10,6 +10,8 @@ function PersonGraphInner({
   mode,
   sizeMode,
   focusId,
+  searchCandidateIds = [],
+  showEdges = true,
   isMobile,
   onNodeClick,
   onBackgroundClick,
@@ -18,6 +20,9 @@ function PersonGraphInner({
   mode: "2d" | "3d";
   sizeMode: NodeSizeMode;
   focusId: string | null;
+  /** 人物検索の候補（確定前）。確定ノード（focusId）より弱い強調 */
+  searchCandidateIds?: string[];
+  showEdges?: boolean;
   isMobile?: boolean;
   onNodeClick: (n: PersonNode) => void;
   onBackgroundClick?: () => void;
@@ -28,6 +33,8 @@ function PersonGraphInner({
         data={data}
         sizeMode={sizeMode}
         focusId={focusId}
+        searchCandidateIds={searchCandidateIds}
+        showEdges={showEdges}
         onNodeClick={onNodeClick}
         onBackgroundClick={onBackgroundClick}
       />
@@ -38,6 +45,8 @@ function PersonGraphInner({
       data={data}
       sizeMode={sizeMode}
       focusId={focusId}
+      searchCandidateIds={searchCandidateIds}
+      showEdges={showEdges}
       onNodeClick={onNodeClick}
       onBackgroundClick={onBackgroundClick}
       isMobile={isMobile}

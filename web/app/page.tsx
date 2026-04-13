@@ -16,7 +16,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 
 const PersonGraph = dynamic(
   () => import("@/components/PersonGraph").then((m) => m.PersonGraph),
-  { ssr: false, loading: () => <div className="flex h-full items-center justify-center bg-white text-slate-500">グラフを初期化中…</div> },
+  { ssr: false, loading: () => <div className="flex h-full items-center justify-center bg-white text-slate-500">Loading graph…</div> },
 );
 import { useWikiDetail } from "@/hooks/useWikiDetail";
 import { buildKHopSubgraph } from "@/lib/graphSubgraph";
@@ -36,6 +36,7 @@ export default function HomePage() {
   const [centerId, setCenterId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [showEdges, setShowEdges] = useState(true);
   /** スマホ向け view を適用してからグラフをマウントし、全体マップを一度も描画しない */
   const [graphDisplayReady, setGraphDisplayReady] = useState(false);
 
@@ -66,7 +67,7 @@ export default function HomePage() {
     if (!data) return null;
     if (view === "global") return data;
     if (!effectiveCenter) return data;
-    return buildKHopSubgraph(data, effectiveCenter, hops);
+    return buildKHopSubgraph(data, String(effectiveCenter), hops);
   }, [data, view, effectiveCenter, hops]);
 
   const deferredQuery = useDeferredValue(query);
@@ -78,6 +79,12 @@ export default function HomePage() {
       .slice(0, 12)
       .map((n) => ({ id: n.id, title: n.title }));
   }, [data, deferredQuery]);
+
+  /** 検索欄に文字があるときの候補ノード（グラフ上で強調） */
+  const searchCandidateIds = useMemo(() => {
+    if (!query.trim()) return [] as string[];
+    return searchHits.map((h) => h.id);
+  }, [query, searchHits]);
 
   const handleNodeClick = useCallback(
     (node: PersonNode) => {
@@ -97,12 +104,11 @@ export default function HomePage() {
     [data, load],
   );
 
-  const handleSetCenterFromPanel = useCallback(() => {
-    if (detail.status === "loading" || detail.status === "idle") return;
-    setCenterId(detail.node.id);
+  const handleSetCenterFromPanel = useCallback((nodeId: string) => {
+    setCenterId(nodeId);
     setView("ego");
-    setFocusId(detail.node.id);
-  }, [detail]);
+    setFocusId(nodeId);
+  }, []);
 
   const handlePickRelated = useCallback(
     (id: string) => {
@@ -136,26 +142,21 @@ export default function HomePage() {
   if (!data || !displayGraph) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
-        <p className="text-slate-400">graph.json を読み込み中…</p>
+        <p className="text-slate-400">Loading graph…</p>
       </main>
     );
   }
 
   return (
-    <main className="relative flex min-h-screen flex-col">
-      <header className="border-b border-surface-border bg-surface-raised/80 px-4 py-3 backdrop-blur">
+    <main className="relative flex h-screen min-h-0 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-surface-border bg-surface-raised/80 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-base font-semibold text-slate-50">perDistMap</h1>
+            <h1 className="text-base font-semibold tracking-tight text-slate-50">Human topology</h1>
             <p className="text-xs text-slate-500">
-              日本語 Wikipedia{" "}
-              {data.metadata.politiciansOnly ? "日本人政治家" : "日本人人物"}
-              リンク距離（{data.metadata.nodeCount} ノード / {data.metadata.edgeCount} エッジ）
-              {isMobile && (
-                <span className="mt-1 block text-[10px] text-slate-600">
-                  スマホは近傍表示で軽量化しています。「全体マップ」は重い場合があります。
-                </span>
-              )}
+              Japanese Wikipedia · link distance · {data.metadata.nodeCount} nodes ·{" "}
+              {data.metadata.edgeCount} edges
+              {data.metadata.politiciansOnly ? " · politicians subset" : ""}
             </p>
           </div>
           <ControlBar
@@ -172,26 +173,27 @@ export default function HomePage() {
             onQueryChange={setQuery}
             searchHits={searchHits}
             onPickHit={handlePickHit}
+            showEdges={showEdges}
+            onShowEdgesChange={setShowEdges}
           />
         </div>
       </header>
 
       <div className="relative min-h-0 flex-1 bg-white">
-        <div
-          className={`absolute inset-0 bg-white touch-none ${
-            isMobile ? "min-h-[min(420px,55vh)] h-[calc(100dvh-160px)]" : "h-[calc(100vh-140px)] min-h-[420px]"
-          }`}
-        >
+        <div className="absolute inset-0 min-h-0 bg-white touch-none">
           {!graphDisplayReady ? (
             <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              グラフを表示準備中…
+              Preparing view…
             </div>
           ) : (
             <PersonGraph
+              key={`${view}-${effectiveCenter ?? "none"}-${hops}`}
               data={displayGraph}
               mode={isMobile ? "2d" : dim}
               sizeMode={sizeMode}
               focusId={focusId}
+              searchCandidateIds={searchCandidateIds}
+              showEdges={showEdges}
               isMobile={isMobile}
               onNodeClick={handleGraphNodeClick}
               onBackgroundClick={handleGraphBackgroundClick}

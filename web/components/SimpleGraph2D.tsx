@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphData, NodeSizeMode, PersonNode } from "@/types/graph";
 import { layoutXYZ, sizeFor } from "@/lib/graphLayout";
+import { nodeSubtitle } from "@/lib/nodeBlurb";
 
 type View2D = { scale: number; offsetX: number; offsetY: number };
 
@@ -23,6 +24,7 @@ export function SimpleGraph2D({
   data,
   sizeMode,
   focusId,
+  cameraFollowHover = false,
   searchCandidateIds = [],
   showEdges = true,
   onNodeClick,
@@ -31,6 +33,8 @@ export function SimpleGraph2D({
   data: GraphData;
   sizeMode: NodeSizeMode;
   focusId: string | null;
+  /** Strong ties 一覧から選んだあと、ホバー中のノードへビューを合わせる */
+  cameraFollowHover?: boolean;
   /** 検索候補（確定選択より弱い強調） */
   searchCandidateIds?: string[];
   showEdges?: boolean;
@@ -46,6 +50,8 @@ export function SimpleGraph2D({
   const multiPointerGestureRef = useRef(false);
   const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
   const prevCentroidRef = useRef<{ x: number; y: number } | null>(null);
+  /** focusId が変わったときだけ選択ノードへ合わせる（タッチ／ピンチ後に戻さない） */
+  const prevFocusIdForViewRef = useRef<string | null | undefined>(undefined);
   const onNodeClickRef = useRef(onNodeClick);
   const onBackgroundClickRef = useRef(onBackgroundClick);
   onNodeClickRef.current = onNodeClick;
@@ -67,6 +73,12 @@ export function SimpleGraph2D({
 
   const [viewTick, setViewTick] = useState(0);
   const bumpView = useCallback(() => setViewTick((x) => x + 1), []);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [hoverTip, setHoverTip] = useState<{
+    x: number;
+    y: number;
+    node: PersonNode;
+  } | null>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -120,28 +132,44 @@ export function SimpleGraph2D({
       const r = sizeFor(n, sizeMode);
       const sid = String(n.id);
       const isFocus = focusStr !== null && sid === focusStr;
+      const isHover = hoveredId !== null && sid === hoveredId;
       const isCandidate = searchCandidateSet.has(sid) && !isFocus;
+      /** ホバー時だけ少し大きく（当たり判定は r のまま） */
+      const drawR = isHover ? r * 1.12 : isFocus ? r * 1.04 : r;
 
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, drawR, 0, Math.PI * 2);
       if (isFocus) {
-        ctx.fillStyle = "#f97316";
+        ctx.fillStyle = "#fb923c";
+      } else if (isHover) {
+        ctx.fillStyle = "#f472b6";
       } else if (isCandidate) {
-        ctx.fillStyle = "#3b82f6";
+        ctx.fillStyle = "#38bdf8";
       } else {
-        ctx.fillStyle = "#2563eb";
+        ctx.fillStyle = "#6366f1";
       }
       ctx.fill();
 
       if (isFocus) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r + 2.8 / t.scale, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(194, 65, 12, 0.95)";
+        ctx.arc(p.x, p.y, drawR + 2.8 / t.scale, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(234, 88, 12, 0.92)";
         ctx.lineWidth = 2.2 / t.scale;
+        ctx.stroke();
+      } else if (isHover) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, drawR + 2.6 / t.scale, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(219, 39, 119, 0.88)";
+        ctx.lineWidth = 2 / t.scale;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, drawR + 5 / t.scale, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(244, 114, 182, 0.35)";
+        ctx.lineWidth = 1.4 / t.scale;
         ctx.stroke();
       } else if (isCandidate) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r + 2.2 / t.scale, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, drawR + 2.2 / t.scale, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(251, 191, 36, 0.95)";
         ctx.lineWidth = 1.6 / t.scale;
         ctx.stroke();
@@ -149,7 +177,17 @@ export function SimpleGraph2D({
     }
 
     ctx.restore();
-  }, [data.edges, data.nodes, positions, sizeMode, viewTick, focusId, searchCandidateSet, showEdges]);
+  }, [
+    data.edges,
+    data.nodes,
+    positions,
+    sizeMode,
+    viewTick,
+    focusId,
+    searchCandidateSet,
+    showEdges,
+    hoveredId,
+  ]);
 
   useEffect(() => {
     draw();
@@ -185,6 +223,21 @@ export function SimpleGraph2D({
   }, [data.nodes, positions, sizeMode, bumpView]);
 
   useEffect(() => {
+    if (cameraFollowHover && hoveredId) {
+      const p = positions.get(String(hoveredId));
+      if (p) {
+        const zs = 1.75;
+        viewRef.current = { scale: zs, offsetX: -p.x * zs, offsetY: -p.y * zs };
+        bumpView();
+      }
+      return;
+    }
+
+    const fid = focusId != null ? String(focusId) : null;
+    if (prevFocusIdForViewRef.current === fid) {
+      return;
+    }
+    prevFocusIdForViewRef.current = fid;
     if (focusId) {
       const p = positions.get(String(focusId));
       if (p) {
@@ -195,7 +248,7 @@ export function SimpleGraph2D({
       return;
     }
     fitBounds();
-  }, [focusId, positions, fitBounds, bumpView]);
+  }, [cameraFollowHover, hoveredId, focusId, positions, fitBounds, bumpView]);
 
   const pickNode = useCallback(
     (sx: number, sy: number): PersonNode | null => {
@@ -299,7 +352,27 @@ export function SimpleGraph2D({
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!activePointersRef.current.has(e.pointerId)) return;
+      if (!activePointersRef.current.has(e.pointerId)) {
+        if (activePointersRef.current.size === 0 && e.buttons === 0) {
+          const cr = canvas.getBoundingClientRect();
+          const wr = wrap.getBoundingClientRect();
+          const sx = e.clientX - cr.left;
+          const sy = e.clientY - cr.top;
+          const n = pickNode(sx, sy);
+          if (n) {
+            setHoveredId(String(n.id));
+            setHoverTip({
+              x: e.clientX - wr.left + 14,
+              y: e.clientY - wr.top - 8,
+              node: n,
+            });
+          } else {
+            setHoveredId(null);
+            setHoverTip(null);
+          }
+        }
+        return;
+      }
       activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       const nPtr = activePointersRef.current.size;
@@ -318,6 +391,8 @@ export function SimpleGraph2D({
         prevCentroidRef.current = c;
         multiPointerGestureRef.current = true;
         movedRef.current = true;
+        setHoveredId(null);
+        setHoverTip(null);
         return;
       }
 
@@ -328,6 +403,8 @@ export function SimpleGraph2D({
       const dy = e.clientY - dragStartRef.current.y;
       if (Math.hypot(dx, dy) > 4) movedRef.current = true;
       if (movedRef.current) {
+        setHoveredId(null);
+        setHoverTip(null);
         const t = viewRef.current;
         viewRef.current = {
           ...t,
@@ -393,12 +470,18 @@ export function SimpleGraph2D({
       e.preventDefault();
     };
 
+    const onPointerLeave = () => {
+      setHoveredId(null);
+      setHoverTip(null);
+    };
+
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerCancel);
     canvas.addEventListener("contextmenu", onContextMenu);
+    canvas.addEventListener("pointerleave", onPointerLeave);
 
     return () => {
       ro.disconnect();
@@ -408,12 +491,26 @@ export function SimpleGraph2D({
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerCancel);
       canvas.removeEventListener("contextmenu", onContextMenu);
+      canvas.removeEventListener("pointerleave", onPointerLeave);
     };
   }, [draw, pickNode, bumpView]);
 
   return (
     <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-white">
-      <canvas ref={canvasRef} className="block h-full w-full touch-none" role="presentation" />
+      <canvas
+        ref={canvasRef}
+        className={`block h-full w-full touch-none ${hoveredId ? "cursor-pointer" : "cursor-default"}`}
+        role="presentation"
+      />
+      {hoverTip && (
+        <div
+          className="pointer-events-none absolute z-30 max-w-[min(280px,calc(100%-24px))] -translate-y-full rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left shadow-lg backdrop-blur-sm"
+          style={{ left: hoverTip.x, top: hoverTip.y }}
+        >
+          <p className="text-sm font-semibold text-slate-900">{hoverTip.node.title}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{nodeSubtitle(hoverTip.node)}</p>
+        </div>
+      )}
     </div>
   );
 }

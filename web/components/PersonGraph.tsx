@@ -10,6 +10,7 @@ function PersonGraphInner({
   mode,
   sizeMode,
   focusId,
+  cameraFollowHover = false,
   searchCandidateIds = [],
   showEdges = true,
   isMobile,
@@ -20,6 +21,8 @@ function PersonGraphInner({
   mode: "2d" | "3d";
   sizeMode: NodeSizeMode;
   focusId: string | null;
+  /** Strong ties 一覧から選んだ直後など、ホバー先へカメラ／ビューを合わせる */
+  cameraFollowHover?: boolean;
   /** 人物検索の候補（確定前）。確定ノード（focusId）より弱い強調 */
   searchCandidateIds?: string[];
   showEdges?: boolean;
@@ -33,6 +36,7 @@ function PersonGraphInner({
         data={data}
         sizeMode={sizeMode}
         focusId={focusId}
+        cameraFollowHover={cameraFollowHover}
         searchCandidateIds={searchCandidateIds}
         showEdges={showEdges}
         onNodeClick={onNodeClick}
@@ -45,6 +49,7 @@ function PersonGraphInner({
       data={data}
       sizeMode={sizeMode}
       focusId={focusId}
+      cameraFollowHover={cameraFollowHover}
       searchCandidateIds={searchCandidateIds}
       showEdges={showEdges}
       onNodeClick={onNodeClick}

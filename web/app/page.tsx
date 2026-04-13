@@ -37,6 +37,8 @@ export default function HomePage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [showEdges, setShowEdges] = useState(true);
+  /** Strong ties リストから人物を選んだあと、ホバーでカメラ／ビューをそのノードへ向ける */
+  const [cameraFollowHover, setCameraFollowHover] = useState(false);
   /** スマホ向け view を適用してからグラフをマウントし、全体マップを一度も描画しない */
   const [graphDisplayReady, setGraphDisplayReady] = useState(false);
 
@@ -96,6 +98,7 @@ export default function HomePage() {
 
   const handlePickHit = useCallback(
     (id: string) => {
+      setCameraFollowHover(false);
       setQuery("");
       setFocusId(id);
       const n = data?.nodes.find((x) => x.id === id);
@@ -105,6 +108,7 @@ export default function HomePage() {
   );
 
   const handleSetCenterFromPanel = useCallback((nodeId: string) => {
+    setCameraFollowHover(false);
     setCenterId(nodeId);
     setView("ego");
     setFocusId(nodeId);
@@ -112,6 +116,7 @@ export default function HomePage() {
 
   const handlePickRelated = useCallback(
     (id: string) => {
+      setCameraFollowHover(true);
       setFocusId(id);
       const n = data?.nodes.find((x) => x.id === id);
       if (n) load(n);
@@ -121,6 +126,7 @@ export default function HomePage() {
 
   const handleGraphNodeClick = useCallback(
     (n: PersonNode) => {
+      setCameraFollowHover(false);
       handleNodeClick(n);
       if (view === "ego") {
         setCenterId(n.id);
@@ -192,6 +198,7 @@ export default function HomePage() {
               mode={isMobile ? "2d" : dim}
               sizeMode={sizeMode}
               focusId={focusId}
+              cameraFollowHover={cameraFollowHover}
               searchCandidateIds={searchCandidateIds}
               showEdges={showEdges}
               isMobile={isMobile}

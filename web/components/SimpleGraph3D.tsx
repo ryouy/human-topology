@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { GraphData, NodeSizeMode, PersonNode } from "@/types/graph";
 import { layoutXYZ, sizeFor } from "@/lib/graphLayout";
+import { nodeSubtitle } from "@/lib/nodeBlurb";
 
 function fitCameraToNodes(
   camera: THREE.PerspectiveCamera,
@@ -56,6 +57,7 @@ export function SimpleGraph3D({
   data,
   sizeMode,
   focusId,
+  cameraFollowHover = false,
   searchCandidateIds = [],
   showEdges = true,
   onNodeClick,
@@ -65,6 +67,8 @@ export function SimpleGraph3D({
   data: GraphData;
   sizeMode: NodeSizeMode;
   focusId: string | null;
+  /** Strong ties 一覧から選んだあと、ホバー中のノードへオービットを向ける */
+  cameraFollowHover?: boolean;
   searchCandidateIds?: string[];
   showEdges?: boolean;
   onNodeClick: (n: PersonNode) => void;
@@ -88,7 +92,23 @@ export function SimpleGraph3D({
   const matBaseRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const matCandidateRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const matFocusRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const matHoverRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const edgeGroupRef = useRef<THREE.Group | null>(null);
+  /** focusId が変わったときだけ選択ノードへスナップ（ホバー解除で戻さない） */
+  const prevFocusIdForCameraRef = useRef<string | null | undefined>(undefined);
+
+  const focusIdRef = useRef<string | null>(null);
+  const searchCandidateIdsRef = useRef<string[]>([]);
+  const hoveredIdRef = useRef<string | null>(null);
+  /** pointer から即時に色・スケールを反映（useEffect より確実） */
+  const applyNodeMaterialsRef = useRef<(explicitHover?: string | null) => void>(() => {});
+
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [hoverTip, setHoverTip] = useState<{
+    x: number;
+    y: number;
+    node: PersonNode;
+  } | null>(null);
 
   const positions = useMemo(() => {
     const m = new Map<string, { x: number; y: number; z: number }>();
@@ -99,10 +119,39 @@ export function SimpleGraph3D({
     return m;
   }, [data.nodes]);
 
-  const searchCandidateSet = useMemo(
-    () => new Set(searchCandidateIds.map((id) => String(id))),
-    [searchCandidateIds],
-  );
+  focusIdRef.current = focusId;
+  searchCandidateIdsRef.current = searchCandidateIds;
+  hoveredIdRef.current = hoveredId;
+
+  applyNodeMaterialsRef.current = (explicitHover) => {
+    const hid = explicitHover !== undefined ? explicitHover : hoveredIdRef.current;
+    const meshes = meshListRef.current;
+    const render = renderRef.current;
+    const mb = matBaseRef.current;
+    const mc = matCandidateRef.current;
+    const mf = matFocusRef.current;
+    const mh = matHoverRef.current;
+    if (!meshes.length || !mb || !mc || !mf || !mh) return;
+
+    const focusStr = focusIdRef.current != null ? String(focusIdRef.current) : null;
+    const cand = new Set(searchCandidateIdsRef.current.map((id) => String(id)));
+    for (const mesh of meshes) {
+      const n = mesh.userData.personNode as PersonNode;
+      const sid = String(n.id);
+      const isFocus = focusStr !== null && sid === focusStr;
+      const isHov = hid !== null && sid === hid;
+      const isCand = cand.has(sid) && !isFocus;
+      let mat = mb;
+      if (isFocus) mat = mf;
+      else if (isHov) mat = mh;
+      else if (isCand) mat = mc;
+      mesh.material = mat;
+      if (isFocus) mesh.scale.setScalar(1.06);
+      else if (isHov) mesh.scale.setScalar(1.14);
+      else mesh.scale.setScalar(1);
+    }
+    render?.();
+  };
 
   const sphereSeg = isMobile === true ? 8 : 12;
 
@@ -182,24 +231,36 @@ export function SimpleGraph3D({
 
     const meshList: THREE.Mesh[] = [];
     const sphereGeomCache = new Map<number, THREE.SphereGeometry>();
-    const matBase = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.45, metalness: 0.1 });
-    const matCandidate = new THREE.MeshStandardMaterial({
-      color: 0x3b82f6,
+    const matBase = new THREE.MeshStandardMaterial({
+      color: 0x6366f1,
       roughness: 0.4,
-      metalness: 0.12,
-      emissive: 0xf59e0b,
-      emissiveIntensity: 0.38,
+      metalness: 0.14,
+    });
+    const matCandidate = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      roughness: 0.36,
+      metalness: 0.16,
+      emissive: 0xfbbf24,
+      emissiveIntensity: 0.28,
     });
     const matFocus = new THREE.MeshStandardMaterial({
-      color: 0xf97316,
-      roughness: 0.35,
-      metalness: 0.12,
-      emissive: 0xc2410c,
-      emissiveIntensity: 0.28,
+      color: 0xfb923c,
+      roughness: 0.32,
+      metalness: 0.14,
+      emissive: 0xf97316,
+      emissiveIntensity: 0.26,
+    });
+    const matHover = new THREE.MeshStandardMaterial({
+      color: 0xf472b6,
+      roughness: 0.3,
+      metalness: 0.18,
+      emissive: 0xf0abfc,
+      emissiveIntensity: 0.32,
     });
     matBaseRef.current = matBase;
     matCandidateRef.current = matCandidate;
     matFocusRef.current = matFocus;
+    matHoverRef.current = matHover;
 
     for (const n of data.nodes) {
       const p = positions.get(String(n.id));
@@ -218,6 +279,10 @@ export function SimpleGraph3D({
       meshList.push(mesh);
     }
     meshListRef.current = meshList;
+
+    queueMicrotask(() => {
+      applyNodeMaterialsRef.current();
+    });
 
     const resize = () => {
       const w = wrap.clientWidth;
@@ -243,13 +308,46 @@ export function SimpleGraph3D({
       dragStartRef.x = e.clientX;
       dragStartRef.y = e.clientY;
       moved = false;
+      hoveredIdRef.current = null;
+      setHoveredId(null);
+      setHoverTip(null);
+      applyNodeMaterialsRef.current(null);
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!(e.buttons & 1)) return;
-      const dx = e.clientX - dragStartRef.x;
-      const dy = e.clientY - dragStartRef.y;
-      if (Math.hypot(dx, dy) > 5) moved = true;
+      if ((e.buttons & 1) !== 0) {
+        const dx = e.clientX - dragStartRef.x;
+        const dy = e.clientY - dragStartRef.y;
+        if (Math.hypot(dx, dy) > 5) moved = true;
+        hoveredIdRef.current = null;
+        setHoveredId(null);
+        setHoverTip(null);
+        applyNodeMaterialsRef.current(null);
+        return;
+      }
+      const cam = cameraRef.current;
+      const meshes = meshListRef.current;
+      if (!cam || meshes.length === 0) return;
+      const rect = canvas.getBoundingClientRect();
+      ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndc, cam);
+      const hits = raycaster.intersectObjects(meshes, false);
+      const first = hits[0];
+      if (first?.object instanceof THREE.Mesh && first.object.userData.personNode) {
+        const pn = first.object.userData.personNode as PersonNode;
+        const id = String(pn.id);
+        hoveredIdRef.current = id;
+        setHoveredId(id);
+        const wr = wrap.getBoundingClientRect();
+        setHoverTip({ x: e.clientX - wr.left + 14, y: e.clientY - wr.top - 8, node: pn });
+        applyNodeMaterialsRef.current(id);
+      } else {
+        hoveredIdRef.current = null;
+        setHoveredId(null);
+        setHoverTip(null);
+        applyNodeMaterialsRef.current(null);
+      }
     };
 
     const onPointerUp = (e: PointerEvent) => {
@@ -277,9 +375,17 @@ export function SimpleGraph3D({
       e.preventDefault();
     };
 
+    const onPointerLeave = () => {
+      hoveredIdRef.current = null;
+      setHoveredId(null);
+      setHoverTip(null);
+      applyNodeMaterialsRef.current(null);
+    };
+
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointerleave", onPointerLeave);
     canvas.addEventListener("contextmenu", onContextMenu);
 
     return () => {
@@ -287,6 +393,7 @@ export function SimpleGraph3D({
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointerleave", onPointerLeave);
       canvas.removeEventListener("contextmenu", onContextMenu);
       controls.removeEventListener("change", render);
       controls.dispose();
@@ -301,9 +408,11 @@ export function SimpleGraph3D({
       matBaseRef.current?.dispose();
       matCandidateRef.current?.dispose();
       matFocusRef.current?.dispose();
+      matHoverRef.current?.dispose();
       matBaseRef.current = null;
       matCandidateRef.current = null;
       matFocusRef.current = null;
+      matHoverRef.current = null;
       matOther.dispose();
       matMutual.dispose();
       scene.clear();
@@ -333,36 +442,45 @@ export function SimpleGraph3D({
     const render = renderRef.current;
     if (!camera || !controls || !renderer || !scene || !render) return;
 
+    if (cameraFollowHover && hoveredId) {
+      focusCameraOn(camera, controls, positionsRef.current, hoveredId);
+      render();
+      return;
+    }
+
+    const fid = focusId != null ? String(focusId) : null;
+    if (prevFocusIdForCameraRef.current === fid) {
+      return;
+    }
+    prevFocusIdForCameraRef.current = fid;
     if (focusId) {
       focusCameraOn(camera, controls, positionsRef.current, focusId);
     } else {
       fitCameraToNodes(camera, controls, positionsRef.current, data.nodes, sizeMode);
     }
     render();
-  }, [focusId, data.nodes, sizeMode]);
+  }, [cameraFollowHover, hoveredId, focusId, data.nodes, sizeMode]);
 
   useEffect(() => {
-    const meshes = meshListRef.current;
-    const render = renderRef.current;
-    const mb = matBaseRef.current;
-    const mc = matCandidateRef.current;
-    const mf = matFocusRef.current;
-    if (!meshes.length || !mb || !mc || !mf) return;
-
-    const focusStr = focusId != null ? String(focusId) : null;
-    for (const mesh of meshes) {
-      const n = mesh.userData.personNode as PersonNode;
-      const sid = String(n.id);
-      const isFocus = focusStr !== null && sid === focusStr;
-      const isCand = searchCandidateSet.has(sid) && !isFocus;
-      mesh.material = isFocus ? mf : isCand ? mc : mb;
-    }
-    render?.();
-  }, [focusId, searchCandidateSet]);
+    applyNodeMaterialsRef.current();
+  }, [focusId, searchCandidateIds, hoveredId]);
 
   return (
     <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-white">
-      <canvas ref={canvasRef} className="block h-full w-full touch-none" role="presentation" />
+      <canvas
+        ref={canvasRef}
+        className={`block h-full w-full touch-none ${hoveredId ? "cursor-pointer" : "cursor-default"}`}
+        role="presentation"
+      />
+      {hoverTip && (
+        <div
+          className="pointer-events-none absolute z-30 max-w-[min(280px,calc(100%-24px))] -translate-y-full rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left shadow-lg backdrop-blur-sm"
+          style={{ left: hoverTip.x, top: hoverTip.y }}
+        >
+          <p className="text-sm font-semibold text-slate-900">{hoverTip.node.title}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{nodeSubtitle(hoverTip.node)}</p>
+        </div>
+      )}
     </div>
   );
 }

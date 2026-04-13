@@ -1,0 +1,16 @@
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "perDistMap — 日本人人物リンク距離",
+  description:
+    "日本語 Wikipedia 上の日本人人物ページのみで構成されたリンク距離の可視化",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ja">
+      <body className="min-h-screen">{children}</body>
+    </html>
+  );
+}

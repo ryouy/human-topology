@@ -1,0 +1,16 @@
+# Node / Next
+web/node_modules/
+web/.next/
+web/out/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# データキャッシュ（巨大になりやすいので通常はコミットしない）
+data/raw/api_cache/
+data/raw/wikidata_cache/
+
+# OS
+.DS_Store

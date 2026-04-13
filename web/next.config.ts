@@ -6,8 +6,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  /** モノレポ直下をルートに据え、ファイルトレースと lockfile 解決を安定させる（Vercel の Root Directory が web のとき） */
-  outputFileTracingRoot: path.join(__dirname, ".."),
+  /**
+   * ローカルではリポジトリ直下をトレースして lockfile 警告を抑える。
+   * Vercel（Root Directory = web）では単一アプリとしてビルドするため付けない。
+   * 親ディレクトリをトレースするとサーバーレスバンドルが欠け、本番で / が 404 になることがある。
+   */
+  ...(process.env.VERCEL
+    ? {}
+    : { outputFileTracingRoot: path.join(__dirname, "..") }),
 };
 
 export default nextConfig;

@@ -54,17 +54,20 @@ function applyForces(fg: FG2Methods | FG3Methods | undefined, nodeCount: number)
 
   fg.d3Force("center", null);
 
+  const n = Math.max(1, nodeCount);
+  // 大規模時は衝突の強さを少し下げて収束を速くし、シミュレーション負荷を抑える
+  const collisionStrength = n > 4500 ? 0.78 : n > 2000 ? 0.86 : 0.94;
+
   // ノード重なりによる「太陽」塊を避ける（半径は描画サイズに合わせる）
   fg.d3Force(
     "collision",
     forceCollide<SimulationNodeDatum & { __size?: number }>()
       .radius((d) => Math.max(5, (d.__size ?? 5) * 0.52 + 3))
-      .strength(0.94),
+      .strength(collisionStrength),
   );
 
   const charge = fg.d3Force("charge") as { strength?: (n: number | (() => number)) => unknown } | undefined;
   if (charge) {
-    const n = Math.max(1, nodeCount);
     // 大規模グラフほど強い反発（上限付き）
     const strength = -Math.min(5200, 420 + Math.sqrt(n) * 38);
     charge.strength?.(strength);
@@ -75,7 +78,6 @@ function applyForces(fg: FG2Methods | FG3Methods | undefined, nodeCount: number)
     strength?: (s: number | ((e: unknown) => number)) => unknown;
   } | undefined;
   if (link) {
-    const n = Math.max(1, nodeCount);
     const dist = Math.min(340, Math.max(175, 95 + Math.sqrt(n) * 2.4));
     link.distance?.(dist);
     // リンクの引きを弱め、ハブ周りの過密を緩和
@@ -92,8 +94,9 @@ function simulationTicksForScale(nodeCount: number, edgeCount: number): {
   cooldownTicks: number;
 } {
   const denom = nodeCount + edgeCount * 0.45 + 400;
-  const cooldownTicks = Math.max(72, Math.min(380, Math.floor(2_800_000 / denom)));
-  const warmupTicks = Math.min(100, Math.max(24, Math.floor(cooldownTicks * 0.25)));
+  // 以前よりやや短めにし、初期レイアウトの CPU 時間を抑える
+  const cooldownTicks = Math.max(64, Math.min(340, Math.floor(2_450_000 / denom)));
+  const warmupTicks = Math.min(90, Math.max(20, Math.floor(cooldownTicks * 0.22)));
   return { warmupTicks, cooldownTicks };
 }
 
@@ -217,8 +220,8 @@ function PersonGraphInner({
         warmupTicks={warmupTicks}
         cooldownTicks={cooldownTicks}
         d3VelocityDecay={0.48}
-        d3AlphaDecay={0.038}
-        d3AlphaMin={0.018}
+        d3AlphaDecay={0.045}
+        d3AlphaMin={0.022}
       />
     );
   }
@@ -239,11 +242,13 @@ function PersonGraphInner({
       onNodeClick={handleClick}
       onBackgroundClick={onBackgroundClick}
       showNavInfo={false}
+      nodeResolution={6}
+      linkResolution={6}
       warmupTicks={warmupTicks}
       cooldownTicks={cooldownTicks}
       d3VelocityDecay={0.48}
-      d3AlphaDecay={0.038}
-      d3AlphaMin={0.018}
+      d3AlphaDecay={0.045}
+      d3AlphaMin={0.022}
     />
   );
 }

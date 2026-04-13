@@ -45,20 +45,24 @@ export function ControlBar({
         </select>
       </label>
 
-      {view === "ego" && (
-        <label className="flex flex-col gap-1 text-[11px] text-slate-400">
-          ホップ数
-          <select
-            value={hops}
-            onChange={(e) => onHopsChange(Number(e.target.value))}
-            className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
-          >
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-            <option value={3}>3</option>
-          </select>
-        </label>
-      )}
+      <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+        ホップ数
+        <select
+          value={hops}
+          disabled={view !== "ego"}
+          onChange={(e) => onHopsChange(Number(e.target.value))}
+          title={
+            view !== "ego"
+              ? "個人起点モードのときだけグラフに反映されます（全体マップでは全ノード表示）"
+              : "中心人物からのリンクの段数"
+          }
+          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <option value={1}>1</option>
+          <option value={2}>2</option>
+          <option value={3}>3</option>
+        </select>
+      </label>
 
       <label className="flex flex-col gap-1 text-[11px] text-slate-400">
         表示

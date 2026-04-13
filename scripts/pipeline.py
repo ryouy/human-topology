@@ -18,6 +18,7 @@ from classify_pages import (
 from compute_metrics import attach_metrics_to_nodes
 from export_json import export_graph_json, export_node_payloads_from_int_keys
 from fetch_pages import (
+    POLITICIAN_SEED_CATEGORIES,
     _project_root,
     collect_expansion_titles,
     collect_seed_titles,
@@ -84,6 +85,11 @@ def main() -> None:
         default=10,
         help="edge-policy=mutual_plus_cap のとき、各ノードの一方通行の出辺の上限（相手の次数が大きい順）",
     )
+    parser.add_argument(
+        "--politicians-only",
+        action="store_true",
+        help="シードカテゴリを「日本の政治家」系に限定し、日本人かつ政治家として判定できる人物のみグラフに含める",
+    )
     args = parser.parse_args()
     progress = not args.quiet
 
@@ -92,12 +98,14 @@ def main() -> None:
     seed_json = root / "data" / "raw" / "seed_titles.json"
     manifest_path = root / "data" / "intermediate" / "seed_manifest.json"
 
+    seed_categories = POLITICIAN_SEED_CATEGORIES if args.politicians_only else None
     titles = collect_seed_titles(
         per_category_limit=args.per_category,
         category_max_depth=args.category_depth,
         seed_json=seed_json,
         category_sleep_sec=args.sleep,
         progress=progress,
+        seed_categories=seed_categories,
     )
     save_title_manifest(titles, manifest_path)
 
@@ -130,6 +138,7 @@ def main() -> None:
                 wikidata_sleep=wd_sleep,
                 progress=progress,
                 progress_label=f"[拡張{round_i + 1} 判定]",
+                politicians_only=args.politicians_only,
             )
             new_titles = collect_expansion_titles(records, person_ids, args.expand_budget)
             if not new_titles:
@@ -183,7 +192,11 @@ def main() -> None:
         progress=progress,
         progress_label="[最終判定]",
     )
-    person_ids = {pid for pid, r in results.items() if r.is_japanese}
+    person_ids = {
+        pid
+        for pid, r in results.items()
+        if r.is_japanese and (not args.politicians_only or r.is_politician)
+    }
     if args.export_classifications:
         export_classifications_json(
             results,
@@ -193,6 +206,7 @@ def main() -> None:
     if not person_ids:
         raise SystemExit(
             "No Japanese person pages classified. Try increasing --per-category or adjusting thresholds in sources/classification.py."
+            + (" (politicians-only: 政治家シグナルが付いた人物がいません)" if args.politicians_only else "")
         )
 
     g = build_person_digraph(
@@ -205,12 +219,17 @@ def main() -> None:
     payloads = attach_metrics_to_nodes(g, records, person_ids)
     str_payloads = export_node_payloads_from_int_keys(payloads)
 
+    graph_type = (
+        "ja.wikipedia.politician_japanese" if args.politicians_only else "ja.wikipedia.person_japanese"
+    )
     export_graph_json(
         g,
         str_payloads,
         args.out,
+        graph_type=graph_type,
         edge_policy=args.edge_policy,
         max_one_way_out=args.max_one_way_out if args.edge_policy == "mutual_plus_cap" else None,
+        politicians_only=args.politicians_only,
     )
 
     if args.web_public:

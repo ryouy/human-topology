@@ -26,6 +26,8 @@ DEFAULT_HEADERS = {
 Q_HUMAN = "Q5"
 # https://www.wikidata.org/wiki/Q17
 Q_JAPAN = "Q17"
+# https://www.wikidata.org/wiki/Q82955 （職業: 政治家）
+Q_POLITICIAN = "Q82955"
 
 
 @dataclass
@@ -39,6 +41,10 @@ class WikidataHints:
     japan_citizenship_or_nationality: bool = False
     """取得できた P31 の Q 番号（デバッグ用）"""
     instance_of_ids: list[str] = field(default_factory=list)
+    """職業 (P106) の Q 番号"""
+    occupation_ids: list[str] = field(default_factory=list)
+    """P106 に政治家 (Q82955) が含まれる"""
+    occupation_politician: bool = False
     raw_error: str | None = None
 
 
@@ -78,11 +84,14 @@ def _parse_entity(eid: str, entity: dict[str, Any]) -> WikidataHints | None:
     claims = entity.get("claims") or {}
     p31 = _extract_statement_entity_ids(claims, "P31")
     p27 = _extract_statement_entity_ids(claims, "P27")
+    p106 = _extract_statement_entity_ids(claims, "P106")
     hints = WikidataHints(
         entity_id=eid,
         instance_of_ids=list(p31),
         instance_of_human=Q_HUMAN in p31,
         japan_citizenship_or_nationality=Q_JAPAN in p27,
+        occupation_ids=list(p106),
+        occupation_politician=Q_POLITICIAN in p106,
     )
     return hints
 
@@ -110,6 +119,8 @@ def fetch_wikidata_hints(
                     instance_of_human=bool(raw.get("instance_of_human")),
                     japan_citizenship_or_nationality=bool(raw.get("japan_citizenship_or_nationality")),
                     instance_of_ids=list(raw.get("instance_of_ids") or []),
+                    occupation_ids=list(raw.get("occupation_ids") or []),
+                    occupation_politician=bool(raw.get("occupation_politician")),
                     raw_error=raw.get("raw_error"),
                 )
             except (json.JSONDecodeError, KeyError):
@@ -159,6 +170,8 @@ def _save_cache(cache_dir: Path | None, title: str, hints: WikidataHints, is_non
         "instance_of_human": hints.instance_of_human,
         "japan_citizenship_or_nationality": hints.japan_citizenship_or_nationality,
         "instance_of_ids": hints.instance_of_ids,
+        "occupation_ids": hints.occupation_ids,
+        "occupation_politician": hints.occupation_politician,
         "raw_error": hints.raw_error,
     }
     p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

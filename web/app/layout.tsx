@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "perDistMap — 日本人人物リンク距離",
+  title: "wiki human topology ",
   description:
-    "日本語 Wikipedia 上の日本人人物ページのみで構成されたリンク距離の可視化",
+    "wiki日本人人物ページのみで構成されたリンク距離の可視化",
 };
 
 export const viewport: Viewport = {

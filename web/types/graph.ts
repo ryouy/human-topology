@@ -31,6 +31,8 @@ export type GraphMetadata = {
   distanceMode: "person_only_shortest_path";
   edgePolicy?: string;
   maxOneWayOutPerNode?: number;
+  /** パイプライン --politicians-only で生成したグラフ */
+  politiciansOnly?: boolean;
 };
 
 export type GraphData = {

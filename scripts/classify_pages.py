@@ -22,12 +22,14 @@ def classify_japanese_person_ids(
     session: requests.Session | None = None,
     progress: bool = True,
     progress_label: str = "[判定]",
+    politicians_only: bool = False,
 ) -> set[int]:
-    """person_score と japan_score が両方閾値以上の page_id の集合。"""
+    """person_score と japan_score が両方閾値以上の page_id の集合。politicians_only 時は政治家シグナルも必須。"""
     out: set[int] = set()
     sess = session or requests.Session()
     items = list(records.items())
     n = len(items)
+    label_jp = "日本人政治家" if politicians_only else "日本人"
     for i, (pid, rec) in enumerate(items):
         wd = fetch_wikidata_hints(
             rec.title,
@@ -37,18 +39,18 @@ def classify_japanese_person_ids(
             use_cache=True,
         )
         res = classify_record(rec, wd)
-        if res.is_japanese:
+        if res.is_japanese and (not politicians_only or res.is_politician):
             out.add(pid)
         if progress and n:
             from sources.progress import line as prog_line
 
             prog_line(
-                f"{progress_label} {i + 1}/{n} | 日本人: {len(out)} 件 | {rec.title[:40]}",
+                f"{progress_label} {i + 1}/{n} | {label_jp}: {len(out)} 件 | {rec.title[:40]}",
             )
     if progress and n:
         from sources.progress import done_line
 
-        done_line(f"{progress_label} 完了: {n} 件中 日本人として採用 {len(out)} 件")
+        done_line(f"{progress_label} 完了: {n} 件中 {label_jp}として採用 {len(out)} 件")
     return out
 
 
@@ -85,13 +87,15 @@ def classify_all(
         if progress and n:
             from sources.progress import line as prog_line
 
+            pol = sum(1 for x in results.values() if x.is_politician)
             prog_line(
-                f"{progress_label} {i + 1}/{n} | 人物: {person_n} 日本人: {jp} | {rec.title[:35]}",
+                f"{progress_label} {i + 1}/{n} | 人物: {person_n} 日本人: {jp} 政治家候補: {pol} | {rec.title[:35]}",
             )
     if progress and n:
         from sources.progress import done_line
 
-        done_line(f"{progress_label} 完了: 全{n}件 | 人物 {person_n} | 日本人 {jp}")
+        pol_n = sum(1 for x in results.values() if x.is_politician)
+        done_line(f"{progress_label} 完了: 全{n}件 | 人物 {person_n} | 日本人 {jp} | 政治家シグナル {pol_n}")
     return results
 
 

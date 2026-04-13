@@ -19,6 +19,7 @@ def export_graph_json(
     *,
     edge_policy: str | None = None,
     max_one_way_out: int | None = None,
+    politicians_only: bool = False,
 ) -> None:
     edges: list[dict[str, Any]] = []
     for u, v in g.edges():
@@ -57,6 +58,8 @@ def export_graph_json(
         meta["edgePolicy"] = edge_policy
     if max_one_way_out is not None:
         meta["maxOneWayOutPerNode"] = max_one_way_out
+    if politicians_only:
+        meta["politiciansOnly"] = True
 
     doc = {"nodes": nodes, "edges": edges, "metadata": meta}
     dest.parent.mkdir(parents=True, exist_ok=True)

@@ -27,6 +27,27 @@ WEIGHTS: dict[str, int] = {
 }
 
 _PERSON_OCC_KEYS = ("俳優", "声優", "歌手", "政治家", "作家", "学者", "実業家", "作曲家", "漫画家", "スポーツ選手")
+
+# 政治家絞り込み: カテゴリ名の部分一致（Wikidata P106=Q82955 と併用）
+_POLITICIAN_CAT_FRAGMENTS = (
+    "政治家",
+    "国会議員",
+    "参議院",
+    "衆議院",
+    "都議会",
+    "県議会",
+    "市議会",
+    "町議会",
+    "村議会",
+    "道議会",
+    "府議会",
+    "区議会",
+    "首長",
+    "内閣総理大臣",
+    "総理大臣",
+    "大臣",
+    "首相",
+)
 _SUMMARY_PERSON_PAT = re.compile(
     r"(政治家|俳優|作家|歌手|学者|実業家|選手|監督|作曲家|漫画家|声優|日本の|日本人|^\s*[^。]{1,40}は)",
 )
@@ -39,6 +60,8 @@ class ClassificationResult:
     is_japanese: bool
     person_score: int
     japan_score: int
+    """Wikidata P106=Q82955 または政治家系カテゴリで推定"""
+    is_politician: bool = False
     reasons: list[str] = field(default_factory=list)
     excluded: bool = False
     exclude_reason: str | None = None
@@ -49,6 +72,7 @@ class ClassificationResult:
             "is_japanese": self.is_japanese,
             "person_score": self.person_score,
             "japan_score": self.japan_score,
+            "is_politician": self.is_politician,
             "reasons": list(self.reasons),
             "excluded": self.excluded,
             "exclude_reason": self.exclude_reason,
@@ -57,6 +81,14 @@ class ClassificationResult:
 
 def _cat_join(categories: list[str]) -> str:
     return " ".join(categories)
+
+
+def is_politician_signal(record: RawPageRecord, wikidata: WikidataHints | None) -> bool:
+    """政治家とみなすシグナル（Wikidata 職業が最優先、なければカテゴリ）。"""
+    if wikidata and wikidata.occupation_politician:
+        return True
+    catj = _cat_join(record.categories)
+    return any(f in catj for f in _POLITICIAN_CAT_FRAGMENTS)
 
 
 def should_exclude_immediately(record: RawPageRecord) -> tuple[bool, str | None]:
@@ -92,6 +124,7 @@ def classify_record(record: RawPageRecord, wikidata: WikidataHints | None) -> Cl
             is_japanese=False,
             person_score=0,
             japan_score=0,
+            is_politician=False,
             reasons=[f"除外: {why}"],
             excluded=True,
             exclude_reason=why,
@@ -154,6 +187,9 @@ def classify_record(record: RawPageRecord, wikidata: WikidataHints | None) -> Cl
 
     is_person = ps >= PERSON_THRESHOLD
     is_japanese = is_person and (js >= JAPAN_THRESHOLD)
+    is_politician = is_politician_signal(record, wikidata)
+    if is_politician:
+        reasons.append("政治家シグナル: Wikidata P106=Q82955 または政治家系カテゴリ")
 
     reasons.append(
         f"判定: person_score={ps} (>={PERSON_THRESHOLD}?), japan_score={js} (>={JAPAN_THRESHOLD}?) → "
@@ -165,6 +201,7 @@ def classify_record(record: RawPageRecord, wikidata: WikidataHints | None) -> Cl
         is_japanese=is_japanese,
         person_score=ps,
         japan_score=js,
+        is_politician=is_politician,
         reasons=reasons,
         excluded=False,
         exclude_reason=None,

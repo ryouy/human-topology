@@ -148,8 +148,9 @@ export default function HomePage() {
           <div>
             <h1 className="text-base font-semibold text-slate-50">perDistMap</h1>
             <p className="text-xs text-slate-500">
-              日本語 Wikipedia 日本人人物リンク距離（{data.metadata.nodeCount} ノード /{" "}
-              {data.metadata.edgeCount} エッジ）
+              日本語 Wikipedia{" "}
+              {data.metadata.politiciansOnly ? "日本人政治家" : "日本人人物"}
+              リンク距離（{data.metadata.nodeCount} ノード / {data.metadata.edgeCount} エッジ）
               {isMobile && (
                 <span className="mt-1 block text-[10px] text-slate-600">
                   スマホは近傍表示で軽量化しています。「全体マップ」は重い場合があります。

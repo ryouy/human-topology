@@ -29,6 +29,11 @@ DEFAULT_SEED_CATEGORIES = [
     "日本のスポーツ選手",
 ]
 
+# --politicians-only 用（カテゴリ BFS のルート）
+POLITICIAN_SEED_CATEGORIES = [
+    "日本の政治家",
+]
+
 
 def _project_root() -> Path:
     return SCRIPT_DIR.parent
@@ -90,12 +95,16 @@ def collect_seed_titles(
     seed_json: Path | None = None,
     category_sleep_sec: float = 0.08,
     progress: bool = True,
+    *,
+    seed_categories: list[str] | None = None,
 ) -> list[str]:
     titles: list[str] = []
     if seed_json and seed_json.exists():
         titles.extend(load_seed_titles_json(seed_json))
 
-    for cat in DEFAULT_SEED_CATEGORIES:
+    categories = seed_categories if seed_categories is not None else DEFAULT_SEED_CATEGORIES
+
+    for cat in categories:
         try:
             if progress:
                 from sources.progress import done_line

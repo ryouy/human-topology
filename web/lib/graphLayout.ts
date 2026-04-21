@@ -2,6 +2,10 @@ import type { NodeSizeMode, PersonNode } from "@/types/graph";
 
 const BOX_HALF = 720;
 const JITTER = 220;
+/** spring 座標が min–max の端にほとんど空振りで、中核が一点に潰れるのを防ぐ */
+const LAYOUT_P_LO = 0.05;
+const LAYOUT_P_HI = 0.95;
+const LAYOUT_CLAMP = BOX_HALF * 1.35;
 
 export function hash01(id: string): number {
   let h = 2166136261;
@@ -37,6 +41,22 @@ export type LayoutBounds = {
   maxZ: number;
 };
 
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.min(lo + 1, sorted.length - 1);
+  if (lo >= hi) return sorted[lo];
+  const t = idx - lo;
+  return sorted[lo] * (1 - t) + sorted[hi] * t;
+}
+
+function percentileRange(values: number[], loP: number, hiP: number): { min: number; max: number } {
+  if (values.length === 0) return { min: 0, max: 0 };
+  const s = [...values].sort((a, b) => a - b);
+  return { min: percentile(s, loP), max: percentile(s, hiP) };
+}
+
 /** graph.json の spring 座標が十分あるときだけバウンディングを返す */
 export function computeLayoutBounds(nodes: PersonNode[]): LayoutBounds | null {
   const xs: number[] = [];
@@ -50,17 +70,33 @@ export function computeLayoutBounds(nodes: PersonNode[]): LayoutBounds | null {
     if (n.z != null && Number.isFinite(n.z)) zs.push(n.z);
   }
   if (xs.length < nodes.length * 0.5) return null;
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const minZ = zs.length === 0 ? 0 : Math.min(...zs);
-  const maxZ = zs.length === 0 ? 0 : Math.max(...zs);
-  return { minX, maxX, minY, maxY, minZ, maxZ };
+  let xr = percentileRange(xs, LAYOUT_P_LO, LAYOUT_P_HI);
+  let yr = percentileRange(ys, LAYOUT_P_LO, LAYOUT_P_HI);
+  if (xr.max - xr.min < 1e-9) {
+    xr = { min: Math.min(...xs), max: Math.max(...xs) };
+  }
+  if (yr.max - yr.min < 1e-9) {
+    yr = { min: Math.min(...ys), max: Math.max(...ys) };
+  }
+  let minZ = 0;
+  let maxZ = 0;
+  if (zs.length > 0) {
+    let zr = percentileRange(zs, LAYOUT_P_LO, LAYOUT_P_HI);
+    if (zr.max - zr.min < 1e-9) {
+      zr = { min: Math.min(...zs), max: Math.max(...zs) };
+    }
+    minZ = zr.min;
+    maxZ = zr.max;
+  }
+  return { minX: xr.min, maxX: xr.max, minY: yr.min, maxY: yr.max, minZ, maxZ };
 }
 
 function normToBox(v: number, minV: number, span: number): number {
   return ((v - minV) / Math.max(span, 1e-12) - 0.5) * 2 * BOX_HALF;
+}
+
+function clampLayout(v: number): number {
+  return Math.max(-LAYOUT_CLAMP, Math.min(LAYOUT_CLAMP, v));
 }
 
 /**
@@ -86,10 +122,10 @@ export function layoutPositionForNode(
   const spanX = bounds.maxX - bounds.minX;
   const spanY = bounds.maxY - bounds.minY;
   const spanZ = bounds.maxZ - bounds.minZ;
-  const x = normToBox(n.x as number, bounds.minX, spanX);
-  const y = normToBox(n.y as number, bounds.minY, spanY);
+  const x = clampLayout(normToBox(n.x as number, bounds.minX, spanX));
+  const y = clampLayout(normToBox(n.y as number, bounds.minY, spanY));
   if (!dim3) return { x, y };
-  const z = normToBox((n.z as number) ?? 0, bounds.minZ, Math.max(spanZ, 1e-12));
+  const z = clampLayout(normToBox((n.z as number) ?? 0, bounds.minZ, Math.max(spanZ, 1e-12)));
   return { x, y, z };
 }
 

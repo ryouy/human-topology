@@ -88,6 +88,25 @@ export default function HomePage() {
     return searchHits.map((h) => h.id);
   }, [query, searchHits]);
 
+  /** ヘッダー用（狭い画面は短く、ホバーで全文） */
+  const headerMeta = useMemo(() => {
+    if (!data) return { short: "", full: "" };
+    const m = data.metadata;
+    const short = `${m.nodeCount} nodes · ${m.edgeCount} edges${m.politiciansOnly ? " · pol." : ""}`;
+    let full = `Japanese Wikipedia · link distance · ${m.nodeCount} nodes · ${m.edgeCount} edges`;
+    if (m.politiciansOnly) full += " · politicians subset";
+    if (m.edgePolicy) {
+      full += ` · edges: ${m.edgePolicy}`;
+      if (m.mutualCapSpread != null) full += ` (±${m.mutualCapSpread})`;
+    }
+    if (m.degreeDistribution) {
+      const d = m.degreeDistribution;
+      full += ` · deg μ ${d.undirectedDegreeMean.toFixed(1)} σ ${d.undirectedDegreeStdev.toFixed(1)}`;
+      if (d.undirectedIsolateCount != null) full += ` · isolates ${d.undirectedIsolateCount}`;
+    }
+    return { short, full };
+  }, [data]);
+
   const handleNodeClick = useCallback(
     (node: PersonNode) => {
       setFocusId(node.id);
@@ -155,50 +174,39 @@ export default function HomePage() {
 
   return (
     <main className="relative flex h-screen min-h-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-surface-border bg-surface-raised/80 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-slate-50">Human topology</h1>
-            <p className="text-xs text-slate-500">
-              Japanese Wikipedia · link distance · {data.metadata.nodeCount} nodes ·{" "}
-              {data.metadata.edgeCount} edges
-              {data.metadata.politiciansOnly ? " · politicians subset" : ""}
-              {data.metadata.edgePolicy
-                ? ` · edges: ${data.metadata.edgePolicy}${
-                    data.metadata.mutualCapSpread != null
-                      ? ` (±${data.metadata.mutualCapSpread})`
-                      : ""
-                  }`
-                : ""}
-              {data.metadata.degreeDistribution ? (
-                <>
-                  {" "}
-                  · deg mean {data.metadata.degreeDistribution.undirectedDegreeMean.toFixed(1)} σ{" "}
-                  {data.metadata.degreeDistribution.undirectedDegreeStdev.toFixed(1)} (undirected)
-                  {data.metadata.degreeDistribution.undirectedIsolateCount != null
-                    ? ` · isolates ${data.metadata.degreeDistribution.undirectedIsolateCount}`
-                    : ""}
-                </>
-              ) : null}
+      <header className="shrink-0 border-b border-surface-border bg-surface-raised/80 px-2 py-1 backdrop-blur sm:px-3 sm:py-1.5">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-1 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between min-[520px]:gap-2">
+          <div className="min-w-0 shrink min-[520px]:max-w-[min(42%,24rem)] lg:max-w-none">
+            <h1 className="truncate text-sm font-semibold tracking-tight text-slate-50 sm:text-base">
+              Human topology
+            </h1>
+            <p
+              className="truncate text-[10px] leading-tight text-slate-500 sm:text-[11px]"
+              title={headerMeta.full}
+            >
+              <span className="min-[520px]:hidden">{headerMeta.short}</span>
+              <span className="hidden min-[520px]:inline">{headerMeta.full}</span>
             </p>
           </div>
-          <ControlBar
-            view={view}
-            onViewChange={setView}
-            dim={dim}
-            onDimChange={setDim}
-            isMobile={isMobile}
-            hops={hops}
-            onHopsChange={setHops}
-            sizeMode={sizeMode}
-            onSizeModeChange={setSizeMode}
-            query={query}
-            onQueryChange={setQuery}
-            searchHits={searchHits}
-            onPickHit={handlePickHit}
-            showEdges={showEdges}
-            onShowEdgesChange={setShowEdges}
-          />
+          <div className="min-w-0 min-[520px]:flex-1 min-[520px]:flex min-[520px]:justify-end">
+            <ControlBar
+              view={view}
+              onViewChange={setView}
+              dim={dim}
+              onDimChange={setDim}
+              isMobile={isMobile}
+              hops={hops}
+              onHopsChange={setHops}
+              sizeMode={sizeMode}
+              onSizeModeChange={setSizeMode}
+              query={query}
+              onQueryChange={setQuery}
+              searchHits={searchHits}
+              onPickHit={handlePickHit}
+              showEdges={showEdges}
+              onShowEdgesChange={setShowEdges}
+            />
+          </div>
         </div>
       </header>
 
@@ -235,17 +243,6 @@ export default function HomePage() {
           />
         )}
       </div>
-
-      <footer className="shrink-0 border-t border-surface-border bg-surface-raised/80 px-4 py-2 text-center backdrop-blur">
-        <a
-          href="https://github.com/ryouy/human-topology"
-          target="_blank"
-          rel="noreferrer"
-          className="text-[11px] text-slate-500 hover:text-slate-300 hover:underline"
-        >
-          Source on GitHub
-        </a>
-      </footer>
     </main>
   );
 }

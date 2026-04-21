@@ -2,6 +2,8 @@
 
 import type { NodeSizeMode } from "@/types/graph";
 
+const GITHUB_REPO = "https://github.com/ryouy/human-topology";
+
 export function ControlBar({
   view,
   onViewChange,
@@ -35,32 +37,28 @@ export function ControlBar({
   onShowEdgesChange: (v: boolean) => void;
   isMobile?: boolean;
 }) {
+  const sel =
+    "rounded border border-surface-border bg-surface px-1.5 py-0.5 text-[11px] text-slate-100 leading-tight";
+  const lab = "text-[10px] leading-none text-slate-500";
+
   return (
-    <div className="pointer-events-auto flex flex-wrap items-end gap-3 rounded-lg border border-surface-border bg-surface-raised/90 px-3 py-2 shadow backdrop-blur">
-      <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+    <div className="pointer-events-auto flex flex-wrap items-end gap-x-2 gap-y-1">
+      <label className={`flex flex-col gap-0.5 ${lab}`}>
         View
-        <select
-          value={view}
-          onChange={(e) => onViewChange(e.target.value as "global" | "ego")}
-          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
-        >
+        <select value={view} onChange={(e) => onViewChange(e.target.value as "global" | "ego")} className={sel}>
           <option value="global">Global</option>
           <option value="ego">Ego</option>
         </select>
       </label>
 
-      <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+      <label className={`flex flex-col gap-0.5 ${lab}`}>
         Hops
         <select
           value={hops}
           disabled={view !== "ego"}
           onChange={(e) => onHopsChange(Number(e.target.value))}
-          title={
-            view !== "ego"
-              ? "Only applies in ego view (global shows the full graph)"
-              : "Neighborhood radius from the center person"
-          }
-          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+          title={view !== "ego" ? "Ego view only" : "Neighborhood radius"}
+          className={`${sel} disabled:cursor-not-allowed disabled:opacity-60`}
         >
           <option value={1}>1</option>
           <option value={2}>2</option>
@@ -68,56 +66,52 @@ export function ControlBar({
         </select>
       </label>
 
-      <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+      <label className={`flex flex-col gap-0.5 ${lab}`}>
         Space
         <select
           value={dim}
           onChange={(e) => onDimChange(e.target.value as "2d" | "3d")}
-          title={
-            isMobile
-              ? "Default is 2D; 3D uses more GPU. Orbit: one finger drag."
-              : undefined
-          }
-          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
+          title={isMobile ? "2D default; 3D uses more GPU" : undefined}
+          className={sel}
         >
-          <option value="2d">2D{isMobile ? " (default)" : ""}</option>
+          <option value="2d">2D{isMobile ? " · def" : ""}</option>
           <option value="3d">3D</option>
         </select>
       </label>
 
-      <label className="flex flex-col gap-1 text-[11px] text-slate-400">
-        Node size
+      <label className={`flex flex-col gap-0.5 ${lab}`}>
+        Size
         <select
           value={sizeMode}
           onChange={(e) => onSizeModeChange(e.target.value as NodeSizeMode)}
-          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
+          className={sel}
         >
-          <option value="inboundLinksCount">In-links</option>
-          <option value="degree">degree</option>
-          <option value="betweenness">betweenness</option>
+          <option value="inboundLinksCount">In</option>
+          <option value="degree">deg</option>
+          <option value="betweenness">betw.</option>
         </select>
       </label>
 
-      <label className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
+      <label className={`flex cursor-pointer items-center gap-1 self-end pb-0.5 ${lab} text-slate-400`}>
         <input
           type="checkbox"
           checked={showEdges}
           onChange={(e) => onShowEdgesChange(e.target.checked)}
           className="rounded border-surface-border"
         />
-        Show edges
+        Edges
       </label>
 
-      <label className="flex min-w-[200px] flex-col gap-1 text-[11px] text-slate-400">
+      <label className={`relative flex min-w-0 max-w-[11rem] flex-1 flex-col gap-0.5 sm:max-w-[13rem] ${lab}`}>
         Search
         <input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Name…"
-          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 placeholder:text-slate-600"
+          className={`${sel} w-full min-w-0`}
         />
         {searchHits.length > 0 && (
-          <ul className="mt-1 max-h-36 overflow-auto rounded border border-surface-border bg-surface text-xs text-slate-200">
+          <ul className="absolute left-0 top-full z-50 mt-0.5 max-h-32 w-full min-w-[10rem] overflow-auto rounded border border-surface-border bg-surface text-[11px] text-slate-200 shadow-lg">
             {searchHits.map((h) => (
               <li key={h.id}>
                 <button
@@ -132,6 +126,15 @@ export function ControlBar({
           </ul>
         )}
       </label>
+
+      <a
+        href={GITHUB_REPO}
+        target="_blank"
+        rel="noreferrer"
+        className="mb-0.5 ml-0.5 shrink-0 border-l border-slate-600/80 pl-2 text-[10px] text-slate-500 hover:text-slate-300 hover:underline sm:pl-2.5"
+      >
+        GitHub
+      </a>
     </div>
   );
 }

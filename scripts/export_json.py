@@ -5,10 +5,37 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import statistics
 from datetime import datetime, timezone
 from typing import Any
 
 import networkx as nx
+
+
+def _degree_distribution_stats(g: nx.DiGraph) -> dict[str, Any]:
+    """無向次数の要約（リンク定義の妥当性チェック用）。"""
+    ug = g.to_undirected()
+    degs = [d for _, d in ug.degree()]
+    if not degs:
+        return {}
+    degs.sort()
+    n = len(degs)
+
+    def pct(p: float) -> float:
+        idx = min(int(round((p / 100.0) * (n - 1))), n - 1)
+        return float(degs[idx])
+
+    zero_n = sum(1 for d in degs if d == 0)
+    return {
+        "undirectedDegreeMean": float(statistics.mean(degs)),
+        "undirectedDegreeStdev": float(statistics.stdev(degs)) if n > 1 else 0.0,
+        "undirectedDegreeMin": int(min(degs)),
+        "undirectedDegreeMax": int(max(degs)),
+        "undirectedDegreeP50": pct(50),
+        "undirectedDegreeP90": pct(90),
+        "undirectedDegreeP99": pct(99),
+        "undirectedIsolateCount": int(zero_n),
+    }
 
 
 def export_graph_json(
@@ -19,6 +46,8 @@ def export_graph_json(
     *,
     edge_policy: str | None = None,
     max_one_way_out: int | None = None,
+    mutual_topk: int | None = None,
+    mutual_cap_spread: int | None = None,
     politicians_only: bool = False,
 ) -> None:
     edges: list[dict[str, Any]] = []
@@ -58,8 +87,15 @@ def export_graph_json(
         meta["edgePolicy"] = edge_policy
     if max_one_way_out is not None:
         meta["maxOneWayOutPerNode"] = max_one_way_out
+    if mutual_topk is not None:
+        meta["mutualTopK"] = mutual_topk
+    if mutual_cap_spread is not None:
+        meta["mutualCapSpread"] = mutual_cap_spread
     if politicians_only:
         meta["politiciansOnly"] = True
+    dist = _degree_distribution_stats(g)
+    if dist:
+        meta["degreeDistribution"] = dist
 
     doc = {"nodes": nodes, "edges": edges, "metadata": meta}
     dest.parent.mkdir(parents=True, exist_ok=True)

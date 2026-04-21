@@ -36,7 +36,7 @@ export default function HomePage() {
   const [centerId, setCenterId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [showEdges, setShowEdges] = useState(true);
+  const [showEdges, setShowEdges] = useState(false);
   /** Strong ties リストから人物を選んだあと、ホバーでカメラ／ビューをそのノードへ向ける */
   const [cameraFollowHover, setCameraFollowHover] = useState(false);
   /** スマホ向け view を適用してからグラフをマウントし、全体マップを一度も描画しない */
@@ -58,7 +58,7 @@ export default function HomePage() {
     if (window.matchMedia(MOBILE_GRAPH_QUERY).matches) {
       setView("ego");
       setHops(1);
-      setDim("2d");
+      /* dim は useState 既定の 2d のまま（ユーザーが 3D に切り替え可能） */
       const first = data.nodes[0]?.id;
       if (first) setCenterId(first);
     }
@@ -163,6 +163,23 @@ export default function HomePage() {
               Japanese Wikipedia · link distance · {data.metadata.nodeCount} nodes ·{" "}
               {data.metadata.edgeCount} edges
               {data.metadata.politiciansOnly ? " · politicians subset" : ""}
+              {data.metadata.edgePolicy
+                ? ` · edges: ${data.metadata.edgePolicy}${
+                    data.metadata.mutualCapSpread != null
+                      ? ` (±${data.metadata.mutualCapSpread})`
+                      : ""
+                  }`
+                : ""}
+              {data.metadata.degreeDistribution ? (
+                <>
+                  {" "}
+                  · deg mean {data.metadata.degreeDistribution.undirectedDegreeMean.toFixed(1)} σ{" "}
+                  {data.metadata.degreeDistribution.undirectedDegreeStdev.toFixed(1)} (undirected)
+                  {data.metadata.degreeDistribution.undirectedIsolateCount != null
+                    ? ` · isolates ${data.metadata.degreeDistribution.undirectedIsolateCount}`
+                    : ""}
+                </>
+              ) : null}
             </p>
           </div>
           <ControlBar
@@ -195,7 +212,7 @@ export default function HomePage() {
             <PersonGraph
               key={`${view}-${effectiveCenter ?? "none"}-${hops}`}
               data={displayGraph}
-              mode={isMobile ? "2d" : dim}
+              mode={dim}
               sizeMode={sizeMode}
               focusId={focusId}
               cameraFollowHover={cameraFollowHover}
@@ -218,6 +235,17 @@ export default function HomePage() {
           />
         )}
       </div>
+
+      <footer className="shrink-0 border-t border-surface-border bg-surface-raised/80 px-4 py-2 text-center backdrop-blur">
+        <a
+          href="https://github.com/ryouy/human-topology"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[11px] text-slate-500 hover:text-slate-300 hover:underline"
+        >
+          Source on GitHub
+        </a>
+      </footer>
     </main>
   );
 }

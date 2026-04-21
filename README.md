@@ -32,6 +32,12 @@ Pulls seeds from categories and `data/raw/seed_titles.json`, classifies pages, e
 python scripts/pipeline.py --per-category 25 --category-depth 2 --sleep 0.08 --expand-rounds 3 --expand-budget 200
 ```
 
+**政治家サブセットに絞る（アプリでよく使う想定）:**
+
+```bash
+python scripts/pipeline.py --politicians-only --per-category 25 --category-depth 2 --sleep 0.08 --expand-rounds 3 --expand-budget 200
+```
+
 | Flag | Role |
 |------|------|
 | `--per-category` | Max pages per seed category (BFS via `categorymembers`) |
@@ -39,8 +45,11 @@ python scripts/pipeline.py --per-category 25 --category-depth 2 --sleep 0.08 --e
 | `--sleep` | Delay between API calls (seconds) |
 | `--expand-rounds` | Rounds of extra page fetch from out-links (`0` = off) |
 | `--expand-budget` | Max new pages per round |
-| `--edge-policy` | `mutual_plus_cap` (default), `mutual`, or `all` |
+| `--edge-policy` | Default **`mutual_adaptive`** (Louvain + variable cap + jitter + union + rescue). Also: `mutual_union_topk`, `mutual_symmetric_topk`, `mutual_plus_cap`, `mutual`, `all` |
+| `--mutual-topk` | Center k for mutual policies (default `28`) |
+| `--mutual-cap-spread` | With `mutual_adaptive`, each node’s cap varies in `[topk−spread, topk+spread]` (default `10`) |
 | `--max-one-way-out` | Cap on one-way out-edges per node when using `mutual_plus_cap` |
+| `--politicians-only` | Seed to Japanese politician categories; graph = JP persons classified as politicians |
 | `--export-classifications` | Write `data/intermediate/classifications.json` |
 
 Classification uses Wikipedia + Wikidata signals; caches live under `data/raw/api_cache/` and `data/raw/wikidata_cache/`. First run is slow; repeats reuse cache. Progress logs on stderr — add `--quiet` to trim noise.

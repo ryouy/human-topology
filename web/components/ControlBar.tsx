@@ -71,14 +71,17 @@ export function ControlBar({
       <label className="flex flex-col gap-1 text-[11px] text-slate-400">
         Space
         <select
-          value={isMobile ? "2d" : dim}
-          disabled={isMobile}
+          value={dim}
           onChange={(e) => onDimChange(e.target.value as "2d" | "3d")}
-          title={isMobile ? "3D is disabled on small screens" : undefined}
-          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
+          title={
+            isMobile
+              ? "Default is 2D; 3D uses more GPU. Orbit: one finger drag."
+              : undefined
+          }
+          className="rounded border border-surface-border bg-surface px-2 py-1 text-xs text-slate-100"
         >
-          <option value="2d">2D{isMobile ? " · default" : ""}</option>
-          {!isMobile && <option value="3d">3D</option>}
+          <option value="2d">2D{isMobile ? " (default)" : ""}</option>
+          <option value="3d">3D</option>
         </select>
       </label>
 

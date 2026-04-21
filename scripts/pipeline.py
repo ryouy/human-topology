@@ -75,15 +75,35 @@ def main() -> None:
     )
     parser.add_argument(
         "--edge-policy",
-        choices=["all", "mutual", "mutual_plus_cap"],
-        default="mutual_plus_cap",
-        help="エッジ間引き: all=全リンク, mutual=相互のみ, mutual_plus_cap=相互+一方通行をノードあたり上限",
+        choices=[
+            "all",
+            "mutual",
+            "mutual_plus_cap",
+            "mutual_symmetric_topk",
+            "mutual_union_topk",
+            "mutual_adaptive",
+        ],
+        default="mutual_adaptive",
+        help="エッジ間引き: mutual_adaptive=コミュニティ+可変cap+ジッター（既定）, "
+        "mutual_union_topk=和集合top-k+救済, mutual_symmetric_topk=対称（孤立しやすい）, 他",
     )
     parser.add_argument(
         "--max-one-way-out",
         type=int,
         default=10,
         help="edge-policy=mutual_plus_cap のとき、各ノードの一方通行の出辺の上限（相手の次数が大きい順）",
+    )
+    parser.add_argument(
+        "--mutual-topk",
+        type=int,
+        default=28,
+        help="相互系ポリシーの中心 k（adaptive では cap の中心）",
+    )
+    parser.add_argument(
+        "--mutual-cap-spread",
+        type=int,
+        default=10,
+        help="edge-policy=mutual_adaptive のとき、各ノードの cap を ±spread だけずらす幅",
     )
     parser.add_argument(
         "--politicians-only",
@@ -214,6 +234,8 @@ def main() -> None:
         person_ids,
         edge_policy=args.edge_policy,
         max_one_way_out=args.max_one_way_out,
+        mutual_topk=args.mutual_topk,
+        mutual_cap_spread=args.mutual_cap_spread,
     )
 
     payloads = attach_metrics_to_nodes(g, records, person_ids)
@@ -229,6 +251,11 @@ def main() -> None:
         graph_type=graph_type,
         edge_policy=args.edge_policy,
         max_one_way_out=args.max_one_way_out if args.edge_policy == "mutual_plus_cap" else None,
+        mutual_topk=args.mutual_topk
+        if args.edge_policy
+        in ("mutual_symmetric_topk", "mutual_union_topk", "mutual_adaptive")
+        else None,
+        mutual_cap_spread=args.mutual_cap_spread if args.edge_policy == "mutual_adaptive" else None,
         politicians_only=args.politicians_only,
     )
 

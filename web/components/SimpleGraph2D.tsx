@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphData, NodeSizeMode, PersonNode } from "@/types/graph";
-import { layoutXYZ, sizeFor } from "@/lib/graphLayout";
+import { buildPositionMap, sizeFor } from "@/lib/graphLayout";
 import { nodeSubtitle } from "@/lib/nodeBlurb";
 
 type View2D = { scale: number; offsetX: number; offsetY: number };
@@ -58,10 +58,10 @@ export function SimpleGraph2D({
   onBackgroundClickRef.current = onBackgroundClick;
 
   const positions = useMemo(() => {
+    const m3 = buildPositionMap(data.nodes, false);
     const m = new Map<string, { x: number; y: number }>();
-    for (const n of data.nodes) {
-      const p = layoutXYZ(String(n.id), false);
-      m.set(String(n.id), { x: p.x, y: p.y });
+    for (const [id, p] of m3) {
+      m.set(id, { x: p.x, y: p.y });
     }
     return m;
   }, [data.nodes]);

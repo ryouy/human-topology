@@ -1,11 +1,11 @@
 {
-  "fetched_pages": 633,
-  "seed_titles": 44,
+  "fetched_pages": 619,
+  "seed_titles": 29,
   "expansion": [
     {
       "round": 1,
       "requested": 200,
-      "new_pages": 195
+      "new_pages": 196
     },
     {
       "round": 2,

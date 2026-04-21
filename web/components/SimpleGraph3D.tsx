@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { GraphData, NodeSizeMode, PersonNode } from "@/types/graph";
-import { layoutXYZ, sizeFor } from "@/lib/graphLayout";
+import { buildPositionMap, sizeFor } from "@/lib/graphLayout";
 import { nodeSubtitle } from "@/lib/nodeBlurb";
 
 function fitCameraToNodes(
@@ -110,14 +110,7 @@ export function SimpleGraph3D({
     node: PersonNode;
   } | null>(null);
 
-  const positions = useMemo(() => {
-    const m = new Map<string, { x: number; y: number; z: number }>();
-    for (const n of data.nodes) {
-      const p = layoutXYZ(String(n.id), true);
-      m.set(String(n.id), { x: p.x, y: p.y, z: p.z ?? 0 });
-    }
-    return m;
-  }, [data.nodes]);
+  const positions = useMemo(() => buildPositionMap(data.nodes, true), [data.nodes]);
 
   focusIdRef.current = focusId;
   searchCandidateIdsRef.current = searchCandidateIds;

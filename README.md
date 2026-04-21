@@ -32,7 +32,6 @@ Pulls seeds from categories and `data/raw/seed_titles.json`, classifies pages, e
 python scripts/pipeline.py --per-category 25 --category-depth 2 --sleep 0.08 --expand-rounds 3 --expand-budget 200
 ```
 
-**政治家サブセットに絞る（アプリでよく使う想定）:**
 
 ```bash
 python scripts/pipeline.py --politicians-only --per-category 25 --category-depth 2 --sleep 0.08 --expand-rounds 3 --expand-budget 200
